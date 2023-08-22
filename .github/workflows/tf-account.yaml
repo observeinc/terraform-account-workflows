@@ -108,15 +108,8 @@ jobs:
           echo "::debug::Inputs.additional customers are: ${{ inputs.additional_customers }}"      
           echo "::debug::Current matrix.workspace is: ${{ matrix.workspace }}"  
           echo "::debug::Repo name is:  ${{ github.event.repository.name }}"
-          terraform workspace -or-create select "${{matrix.workspace}}"
-          # # Check if the Terraform workspace exists, otherwise create it 
-          # if ! terraform workspace select "${{matrix.workspace}}" &>/dev/null; then
-          #     echo "Workspace '${{matrix.workspace}}' does not exist. Creating..."
-          #     terraform workspace new "${{matrix.workspace}}"
-          # else
-          #     echo "Workspace '${{matrix.workspace}}' already exists. Selecting workspace"
-          #     terraform workspace select "${{matrix.workspace}}"
-          # fi         
+          terraform workspace create  ${{ matrix.workspace }}|| echo "Workspace  ${{ matrix.workspace }} already exists or cannot be created"
+          echo "TF_WORKSPACE=${{ matrix.workspace }}" >> $GITHUB_ENV
 
       - name: Terraform Plan
         id: plan
@@ -124,7 +117,7 @@ jobs:
         run: |
           path='plan'
           txt_path='plan.txt'
-
+          terraform workspace show 
           terraform plan -no-color -out="$path"
           terraform show -no-color "$path" > "$txt_path"
           echo "path=${txt_path}" >> $GITHUB_OUTPUT
