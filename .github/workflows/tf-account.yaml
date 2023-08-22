@@ -112,7 +112,7 @@ jobs:
 
       - name: Terraform Plan
         id: plan
-        if: github.event_name == 'pull_request' && steps.workspace.outcome == 'success'
+        if: github.event_name == 'pull_request' 
         run: |
           path='plan'
           txt_path='plan.txt'
