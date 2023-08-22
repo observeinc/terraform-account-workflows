@@ -83,8 +83,6 @@ jobs:
           echo "::debug::Inputs.additional customers are: ${{ inputs.additional_customers }}"      
           echo "::debug::matrix.workspace is: ${{ matrix.workspace }}"  
           echo "::debug::Repo name is:  ${{ github.event.repository.name }}"
-          echo "::debug::Set the Octocat variable"
-
               
       - name: Terraform Format
         id: fmt
