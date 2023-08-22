@@ -111,14 +111,15 @@ jobs:
       - name: Terraform Workspace Configure 
         id: workspaces 
         run: |
-          # Check if the Terraform workspace exists, otherwise create it 
-          if ! terraform workspace select "${{matrix.workspace}}" &>/dev/null; then
-              echo "Workspace '${{matrix.workspace}}' does not exist. Creating..."
-              terraform workspace new "${{matrix.workspace}}"
-          else
-              echo "Workspace '${{matrix.workspace}}' already exists. Selecting workspace"
-              terraform workspace select "${{matrix.workspace}}"
-          fi         
+          terraform workspace select "${{matrix.workspace}}" -or-create
+          # # Check if the Terraform workspace exists, otherwise create it 
+          # if ! terraform workspace select "${{matrix.workspace}}" &>/dev/null; then
+          #     echo "Workspace '${{matrix.workspace}}' does not exist. Creating..."
+          #     terraform workspace new "${{matrix.workspace}}"
+          # else
+          #     echo "Workspace '${{matrix.workspace}}' already exists. Selecting workspace"
+          #     terraform workspace select "${{matrix.workspace}}"
+          # fi         
 
       - name: Terraform Plan
         id: plan
