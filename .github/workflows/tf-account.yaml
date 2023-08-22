@@ -76,14 +76,8 @@ jobs:
           NO_PROXY: ${{ inputs.no-proxy }}
         run: |
           printf "HTTPS_PROXY=%s\n" "$HTTPS_PROXY" >> "$GITHUB_ENV"
-          printf "NO_PROXY=%s\n" "$NO_PROXY" >> "$GITHUB_ENV"
-
-      - name: Print Environmental Variables 
-        run: |    
-          echo "::debug::Inputs.additional customers are: ${{ inputs.additional_customers }}"      
-          echo "::debug::matrix.workspace is: ${{ matrix.workspace }}"  
-          echo "::debug::Repo name is:  ${{ github.event.repository.name }}"
-              
+          printf "NO_PROXY=%s\n" "$NO_PROXY" >> "$GITHUB_ENV"  
+        
       - name: Terraform Format
         id: fmt
         run: terraform fmt -check
@@ -111,7 +105,10 @@ jobs:
       - name: Terraform Workspace Configure 
         id: workspaces 
         run: |
-          terraform workspace select "${{matrix.workspace}}" -or-create
+          echo "::debug::Inputs.additional customers are: ${{ inputs.additional_customers }}"      
+          echo "::debug::Current matrix.workspace is: ${{ matrix.workspace }}"  
+          echo "::debug::Repo name is:  ${{ github.event.repository.name }}"
+          terraform workspace -or-create select "${{matrix.workspace}}"
           # # Check if the Terraform workspace exists, otherwise create it 
           # if ! terraform workspace select "${{matrix.workspace}}" &>/dev/null; then
           #     echo "Workspace '${{matrix.workspace}}' does not exist. Creating..."
