@@ -103,17 +103,17 @@ jobs:
         run: terraform validate -no-color
       
       - name: Terraform Workspace Configure 
-        id: workspaces 
+        id: workspace
         run: |
           echo "::debug::Inputs.additional customers are: ${{ inputs.additional_customers }}"      
           echo "::debug::Current matrix.workspace is: ${{ matrix.workspace }}"  
           echo "::debug::Repo name is:  ${{ github.event.repository.name }}"
-          terraform workspace create  ${{ matrix.workspace }}|| echo "Workspace  ${{ matrix.workspace }} already exists or cannot be created"
+          terraform workspace create new ${{ matrix.workspace }}|| echo "Workspace  ${{ matrix.workspace }} already exists or cannot be created"
           echo "TF_WORKSPACE=${{ matrix.workspace }}" >> $GITHUB_ENV
 
       - name: Terraform Plan
         id: plan
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' && steps.workspace.outcome == 'success'
         run: |
           path='plan'
           txt_path='plan.txt'
