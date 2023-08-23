@@ -71,7 +71,7 @@ jobs:
       - name: Run read-yaml action
         id: yaml-data
         if: inputs.additional_customers != ''
-        uses: jbutcher5/read-yaml@main      
+        uses: jbutcher5/read-yaml@1.6 
         with:
           file: ${{ github.workspace }}/${{ inputs.additional_customers }}        
           key-path: '["additional_customers"]' 
