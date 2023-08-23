@@ -40,7 +40,7 @@ jobs:
   build_matrix:
     runs-on: ubuntu-latest
     outputs:
-      matrix: ${{ toJson(steps.read-yaml.outputs)}}   
+      matrix: '${{ toJson(steps.read-yaml.outputs)}}' 
     steps:         
       - name: Checkout
         uses: actions/checkout@v3        
@@ -62,7 +62,9 @@ jobs:
       pull-requests: write
     strategy:
       fail-fast: false      
-      matrix: ${{ fromJson(needs.build_matrix.outputs.matrix) }}
+      #matrix: ${{ fromJson(needs.build_matrix.outputs.matrix) }}
+      matrix: 
+        workspace: [default]
     needs:
       - build_matrix
     steps:
@@ -71,8 +73,12 @@ jobs:
       
       - name: Echo previous outputs
         run: |
-          echo ${{matrix.name}}
-          echo ${{matrix.customer}}         
+          echo "${{ needs.build_matrix.outputs }}"
+          echo "${{ fromJSON(needs.build_matrix.outputs) }}"
+          echo "${{ toJSON(needs.build_matrix.outputs) }}"
+         #echo ${{matrix.name}}
+          #echo ${{matrix.name}}
+          #echo ${{matrix.customer}}         
 
 
       # - name: Read Additional Customers 
