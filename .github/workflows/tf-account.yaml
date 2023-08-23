@@ -47,8 +47,8 @@ jobs:
       pull-requests: write
     strategy:
       fail-fast: false
-      # matrix:
-      #   workspace: [default, "${{ inputs.additional_customers }}"]
+      matrix:
+        workspace: [default]
     steps:
       - name: Checkout
         uses: actions/checkout@v3
