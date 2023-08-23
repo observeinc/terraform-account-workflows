@@ -48,7 +48,7 @@ jobs:
         if: inputs.additional_customers != ''
         id: read-yaml       
         with:
-          config: ${{ github.workspace }}/${{ inputs.additional_customers }}       
+          config: ${{ inputs.additional_customers }}       
     
   terraform:
     name: 'Run terraform'
