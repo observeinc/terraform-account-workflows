@@ -42,13 +42,15 @@ jobs:
     outputs:
       matrix: '${{ toJson(steps.read-yaml.outputs)}}'    
     steps:         
+      - name: Checkout
+        uses: actions/checkout@v3        
       - name: Read Additional Customers 
         uses: pietrobolcato/action-read-yaml@1.1.0
         #Read additional customers if provided 
         if: inputs.additional_customers != ''
         id: read-yaml       
         with:
-          config: ${{ inputs.additional_customers }}       
+          config: ${{ github.workspace }}/${{ inputs.additional_customers }}       
     
   terraform:
     name: 'Run terraform'
