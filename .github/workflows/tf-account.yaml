@@ -40,7 +40,7 @@ jobs:
   build_matrix:
     runs-on: ubuntu-latest
     outputs:
-      matrix: ${{ toJson(steps.read-yaml.outputs)}}
+      matrix: '${{ toJson(steps.read-yaml.outputs)}}'
      #matrix: ${{ steps.read-yaml.outputs }}
     steps:         
       - name: Checkout
@@ -63,9 +63,9 @@ jobs:
       pull-requests: write
     strategy:
       fail-fast: false      
-      matrix: ${{ fromJson(needs.build_matrix.outputs.matrix) }}
-      #matrix: 
-      #  workspace: [default]
+      #matrix: ${{ fromJson(needs.build_matrix.outputs.matrix) }}
+      matrix: 
+        workspace: [default]
     needs:
       - build_matrix
     steps:
@@ -74,7 +74,7 @@ jobs:
 
       - name: Echo previous outputs
         run: |
-          echo ${{matrix}}
+          echo "${{needs.build_matrix.outputs.matrix}}"
       
       # - name: Echo previous outputs
       #   run: |
