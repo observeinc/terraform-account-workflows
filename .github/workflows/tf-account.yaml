@@ -36,7 +36,22 @@ on:
         type: string 
         description: Additional customers to apply TF-Account Config to 
 
-jobs:
+jobs: 
+  build_matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: '${{ toJson(steps.read-yaml.outputs)}}'
+    
+    steps:         
+      - name: Read Additional Customers 
+        uses: pietrobolcato/action-read-yaml@1.1.0
+        #Read additional customers if provided 
+        if: inputs.additional_customers != ''
+        id: read-yaml       
+        with:
+          config: ${{ github.workspace }}/${{ inputs.additional_customers }}        
+   
+    
   terraform:
     name: 'Run terraform'
     runs-on: ubuntu-latest
@@ -49,36 +64,31 @@ jobs:
       fail-fast: false
       matrix:
         workspace: [default]
+    needs:
+      - build_matrix
+
     steps:
       - name: Checkout
         uses: actions/checkout@v3
       
-      - name: Read Additional Customers 
-        uses: pietrobolcato/action-read-yaml@1.1.0
-        #Read additional cusomters if provided 
-        if: inputs.additional_customers != ''
-        id: read-yaml       
-        with:
-          config: ${{ github.workspace }}/${{ inputs.additional_customers }}
-      
-      - name: Generate Additional Customer Matrix
-        ##Trying this out to make it dependent on previous step         
-        if: steps.read-yaml.outcome == 'success' 
-        run: | 
-          echo addnl customers outputs: '${{ toJson(steps.read-yaml.outputs)}}'
-          #echo ${{ (steps.read-yaml.outputs)}} 
-    
+      - name: Echo previous outputs
+        run: echo "${{ toJSON(needs.build_matrix.outputs.matrix) }}"
 
-      # - name: Run read-yaml action
-      #   id: yaml-data
+      # - name: Read Additional Customers 
+      #   uses: pietrobolcato/action-read-yaml@1.1.0
+      #   #Read additional cusomters if provided 
       #   if: inputs.additional_customers != ''
-      #   uses: jbutcher5/read-yaml@1.6 
+      #   id: read-yaml       
       #   with:
-      #     file: ${{ github.workspace }}/${{ inputs.additional_customers }}        
-      #     key-path: '["additional_customers"]' 
-
-      # - name: Display read-yaml output
-      #   run: echo "${{ steps.yaml-data.outputs.data }}"
+      #     config: ${{ github.workspace }}/${{ inputs.additional_customers }}
+      
+      # - name: Generate Additional Customer Matrix
+      #   ##Trying this out to make it dependent on previous step         
+      #   if: steps.read-yaml.outcome == 'success' 
+      #   run: | 
+      #     echo addnl customers outputs: '${{ toJson(steps.read-yaml.outputs)}}'
+      #     #echo ${{ (steps.read-yaml.outputs)}} 
+    
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
