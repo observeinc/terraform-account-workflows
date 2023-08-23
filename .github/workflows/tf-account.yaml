@@ -61,9 +61,8 @@ jobs:
       contents: write
       pull-requests: write
     strategy:
-      fail-fast: false
-      matrix:
-        workspace: [default]
+      fail-fast: false      
+      matrix: ${{ fromJson(needs.build_matrix.outputs.matrix) }}
     needs:
       - build_matrix
     steps:
@@ -72,9 +71,8 @@ jobs:
       
       - name: Echo previous outputs
         run: |
-          echo ${{ fromJSON(needs.build_matrix.outputs.matrix) }}
-          echo ${{ fromJSON(needs.build_matrix.outputs.matrix.name) }}
-          echo ${{ fromJSON(needs.build_matrix.outputs.matrix.customer) }}
+          echo ${{matrix.name}}
+          echo ${{matrix.customer}}         
 
 
       # - name: Read Additional Customers 
