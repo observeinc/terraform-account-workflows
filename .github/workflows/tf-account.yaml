@@ -67,6 +67,7 @@ jobs:
         run: | 
           echo addnl customers outputs: ${{ steps.read-yaml.outputs}} 
           echo addnl customers outputs 2: ${{ steps.read-yaml.outputs['additional_customers']}} 
+          echo addnl customers outputs 3: ${{ steps.read-yaml.outputs['additional_customers.name']}} 
       
 
       # - name: Run read-yaml action
