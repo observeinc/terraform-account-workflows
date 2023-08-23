@@ -53,31 +53,32 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
       
-      # - name: Read Additional Customers 
-      #   uses: pietrobolcato/action-read-yaml@1.1.0
-      #   #Read additional cusomters if provided 
-      #   if: inputs.additional_customers != ''
-      #   id: read-yaml       
-      #   with:
-      #     config: ${{ github.workspace }}/${{ inputs.additional_customers }}
-      
-      # - name: Generate Additional Customer Matrix
-      #   ##Trying this out to make it dependent on previous step         
-      #   if: steps.read-yaml.outcome == 'success' 
-      #   run: | 
-      #     echo addnl customers outputs: ${{ steps.read-yaml.outputs['additional_customers']}} 
-      
-
-      - name: Run read-yaml action
-        id: yaml-data
+      - name: Read Additional Customers 
+        uses: pietrobolcato/action-read-yaml@1.1.0
+        #Read additional cusomters if provided 
         if: inputs.additional_customers != ''
-        uses: jbutcher5/read-yaml@1.6 
+        id: read-yaml       
         with:
-          file: ${{ github.workspace }}/${{ inputs.additional_customers }}        
-          key-path: '["additional_customers"]' 
+          config: ${{ github.workspace }}/${{ inputs.additional_customers }}
+      
+      - name: Generate Additional Customer Matrix
+        ##Trying this out to make it dependent on previous step         
+        if: steps.read-yaml.outcome == 'success' 
+        run: | 
+          echo addnl customers outputs: ${{ steps.read-yaml.outputs}} 
+          echo addnl customers outputs 2: ${{ steps.read-yaml.outputs['additional_customers']}} 
+      
 
-      - name: Display read-yaml output
-        run: echo "${{ steps.yaml-data.outputs.data }}"
+      # - name: Run read-yaml action
+      #   id: yaml-data
+      #   if: inputs.additional_customers != ''
+      #   uses: jbutcher5/read-yaml@1.6 
+      #   with:
+      #     file: ${{ github.workspace }}/${{ inputs.additional_customers }}        
+      #     key-path: '["additional_customers"]' 
+
+      # - name: Display read-yaml output
+      #   run: echo "${{ steps.yaml-data.outputs.data }}"
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
