@@ -31,27 +31,26 @@ on:
       no-proxy:
         required: false
         type: string
-      additional_customers:
+      customers:
         required: false
         type: string 
-        description: Additional customers to apply TF-Account Config to 
+        description: Customers to apply TF-Account Config to 
 
 jobs: 
   build_matrix:
     runs-on: ubuntu-latest
     outputs:
-      matrix: '${{ toJson(steps.read-yaml.outputs)}}'
-     #matrix: ${{ steps.read-yaml.outputs }}
+      matrix: ${{ steps.yaml2json.outputs.output }}
     steps:         
       - name: Checkout
         uses: actions/checkout@v3        
-      - name: Read Additional Customers 
-        uses: pietrobolcato/action-read-yaml@1.1.0
-        #Read additional customers if provided 
-        if: inputs.additional_customers != ''
-        id: read-yaml       
+      - name: Converted
+        uses: fabasoad/data-format-converter-action@main
+        id: yaml2json
         with:
-          config: ${{ github.workspace }}/${{ inputs.additional_customers }}       
+          input: ${{ github.workspace }}/${{ inputs.customers }} 
+          from: "yaml"
+          to: "json"
     
   terraform:
     name: 'Run terraform'
@@ -63,9 +62,7 @@ jobs:
       pull-requests: write
     strategy:
       fail-fast: false      
-      #matrix: ${{ fromJson(needs.build_matrix.outputs.matrix) }}
-      matrix: 
-        workspace: [default]
+      matrix: ${{ fromJson(needs.build_matrix.outputs.matrix) }}    
     needs:
       - build_matrix
     steps:
@@ -74,36 +71,8 @@ jobs:
 
       - name: Echo previous outputs
         run: |
-          echo ${{needs.build_matrix.outputs.matrix}}
-      
-      # - name: Echo previous outputs
-      #   run: |
-      #     echo "test taemplate"
-      #     #echo "${{ needs.build_matrix.outputs.matrix }}"          
-      #     #echo '${{ toJson(needs.build_matrix.outputs.matrix)}}' 
-      #     #echo "${{ needs.build_matrix.outputs.matrix }}"
-      #     #echo "${{ fromJSON(needs.build_matrix.outputs) }}"
-      #     #echo "${{ toJSON(needs.build_matrix.outputs) }}"
-      #     #echo ${{matrix.name}}
-      #     #echo ${{matrix.name}}
-      #     #echo ${{matrix.customer}}         
-
-
-      # - name: Read Additional Customers 
-      #   uses: pietrobolcato/action-read-yaml@1.1.0
-      #   #Read additional cusomters if provided 
-      #   if: inputs.additional_customers != ''
-      #   id: read-yaml       
-      #   with:
-      #     config: ${{ github.workspace }}/${{ inputs.additional_customers }}
-      
-      # - name: Generate Additional Customer Matrix
-      #   ##Trying this out to make it dependent on previous step         
-      #   if: steps.read-yaml.outcome == 'success' 
-      #   run: | 
-      #     echo addnl customers outputs: '${{ toJson(steps.read-yaml.outputs)}}'
-      #     #echo ${{ (steps.read-yaml.outputs)}} 
-    
+          echo ${{ matrix.customers.name }}
+          echo '${{ toJson(matrix) }}'      
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
@@ -157,10 +126,8 @@ jobs:
       - name: Terraform Workspace Configure 
         id: workspace
         run: |
-          echo "::debug::Inputs.additional customers are: ${{ inputs.additional_customers }}"      
-          echo "::debug::Current matrix.workspace is: ${{ matrix.workspace }}"  
           echo "::debug::Repo name is:  ${{ github.event.repository.name }}"
-          terraform workspace select -or-create=true ${{ matrix.workspace }}
+          terraform workspace select -or-create=true ${{ matrix.customers.name }}
 
       - name: Terraform Plan
         id: plan
