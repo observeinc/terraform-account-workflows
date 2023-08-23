@@ -56,7 +56,7 @@ jobs:
       - name: Read Additional Customers 
         uses: pietrobolcato/action-read-yaml@1.0.0
         #Read additional cusomters if provided 
-        if: github.event.inputs.additional_customers != ''
+        if: inputs.additional_customers != ''
         id: read-yaml       
         with:
           config: ${{ github.workspace }}/${{ inputs.additional_customers }}
