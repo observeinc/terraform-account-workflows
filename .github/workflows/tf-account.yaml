@@ -72,17 +72,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
       
-      - name: Echo previous outputs
-        run: |
-          echo "test taemplate"
-          #echo "${{ needs.build_matrix.outputs.matrix }}"          
-          #echo '${{ toJson(needs.build_matrix.outputs.matrix)}}' 
-          #echo "${{ needs.build_matrix.outputs.matrix }}"
-          #echo "${{ fromJSON(needs.build_matrix.outputs) }}"
-          #echo "${{ toJSON(needs.build_matrix.outputs) }}"
-          #echo ${{matrix.name}}
-          #echo ${{matrix.name}}
-          #echo ${{matrix.customer}}         
+      # - name: Echo previous outputs
+      #   run: |
+      #     echo "test taemplate"
+      #     #echo "${{ needs.build_matrix.outputs.matrix }}"          
+      #     #echo '${{ toJson(needs.build_matrix.outputs.matrix)}}' 
+      #     #echo "${{ needs.build_matrix.outputs.matrix }}"
+      #     #echo "${{ fromJSON(needs.build_matrix.outputs) }}"
+      #     #echo "${{ toJSON(needs.build_matrix.outputs) }}"
+      #     #echo ${{matrix.name}}
+      #     #echo ${{matrix.name}}
+      #     #echo ${{matrix.customer}}         
 
 
       # - name: Read Additional Customers 
