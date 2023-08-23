@@ -66,6 +66,7 @@ jobs:
         if: steps.read-yaml.outcome == 'success' 
         run: | 
           echo addnl customers outputs: ${{ toJson(steps.read-yaml.outputs)}} 
+          #echo ${{ (steps.read-yaml.outputs)}} 
     
 
       # - name: Run read-yaml action
