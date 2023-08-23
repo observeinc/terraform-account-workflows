@@ -74,7 +74,7 @@ jobs:
 
       - name: Echo previous outputs
         run: |
-          echo "${{ fromJson(needs.build_matrix.outputs.matrix) }}"      
+          echo "${{ fromJson(needs.build_matrix.outputs.matrix.name) }}"      
       
       # - name: Echo previous outputs
       #   run: |
