@@ -65,7 +65,7 @@ jobs:
         ##Trying this out to make it dependent on previous step         
         if: steps.read-yaml.outcome == 'success' 
         run: | 
-          echo addnl customers outputs: ${{ fromJSON(steps.read-yaml.outputs)}} 
+          echo addnl customers outputs: ${{ toJson(steps.read-yaml.outputs)}} 
           echo addnl customers outputs 2: ${{ steps.read-yaml.outputs['additional_customers']}} 
           echo addnl customers outputs 3: ${{ steps.read-yaml.outputs['additional_customers.name']}} 
           echo addnl customers outputs 4: ${{ steps.read-yaml.outputs['name']}} 
