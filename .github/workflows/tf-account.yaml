@@ -16,6 +16,7 @@ on:
         required: false
       TS_OAUTH_SECRET:
         required: false
+    
     inputs:
       terraform-version:
         description: 'Terraform version'
@@ -32,9 +33,9 @@ on:
         required: false
         type: string
       customers:
-        required: false
+        required: true
         type: string 
-        description: Customers to apply TF-Account Config to 
+        description: YAML file Customers to apply TF-Account Config to 
 
 jobs: 
   build_matrix:
@@ -43,8 +44,8 @@ jobs:
       matrix: ${{ steps.yaml2json.outputs.output }}
     steps:         
       - name: Checkout
-        uses: actions/checkout@v3        
-      - name: Converted
+        uses: actions/checkout@v3           
+      - name: Convert customer yaml to json
         uses: fabasoad/data-format-converter-action@main
         id: yaml2json
         with:
@@ -53,7 +54,7 @@ jobs:
           to: "json"
     
   terraform:
-    name: 'Run terraform'
+    name: 'Run terraform - ${{ matrix.customers.name }}' 
     runs-on: ubuntu-latest
     # Needed to interact with Github's OIDC token
     permissions:
@@ -68,12 +69,7 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-
-      - name: Echo previous outputs
-        run: |
-          echo ${{ matrix.customers.name }}
-          echo '${{ toJson(matrix) }}'      
-
+    
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
         with:
@@ -98,7 +94,18 @@ jobs:
         run: |
           printf "HTTPS_PROXY=%s\n" "$HTTPS_PROXY" >> "$GITHUB_ENV"
           printf "NO_PROXY=%s\n" "$NO_PROXY" >> "$GITHUB_ENV"  
-        
+
+      - name: Create Override file (non-default customer)
+        if: matrix.customers.name != 'default'
+        run: |
+            echo '::debug::${{ toJson(matrix) }}'           
+            echo 'provider "observe" {' >> override.tf
+            echo '  customer      = "${{ matrix.customers.customer }}"' >> override.tf
+            echo '  user_email    = "${{ matrix.customers.user_email }}"' >> override.tf
+            echo '  user_password = ''${{secrets[matrix.customers.user_password]}}''' >> override.tf
+            echo '  domain        = "${{ matrix.customers.domain }}"' >> override.tf
+            echo '}' >> override.tf         
+            
       - name: Terraform Format
         id: fmt
         run: terraform fmt -check
@@ -125,8 +132,7 @@ jobs:
       
       - name: Terraform Workspace Configure 
         id: workspace
-        run: |
-          echo "::debug::Repo name is:  ${{ github.event.repository.name }}"
+        run: |         
           terraform workspace select -or-create=true ${{ matrix.customers.name }}
 
       - name: Terraform Plan
