@@ -33,7 +33,7 @@ on:
         required: false
         type: string
       customers:
-        required: false
+        required: true
         type: string 
         description: YAML file of customers to apply TF-Account Config to 
 
@@ -42,26 +42,14 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.yaml2json.outputs.output }}
-    env: 
-      CUSTOMER_FILE: ${{ inputs.customers }}
     steps:         
       - name: Checkout
-        uses: actions/checkout@v3       
-      - name: Create a default customer file (if not provided)
-        if: env.customer_file == ''
-        run: |
-          echo 'customers:' > ${{ github.workspace }}/.github/customers.yml
-          echo '  - name: default' >> ${{ github.workspace }}/.github/customers.yml
-          echo "CUSTOMER_FILE='.github/customers.yml'" >> $GITHUB_ENV  
-      - name: Print 
-        run: |
-          echo ${{ env.CUSTOMER_FILE }} 
-          cat  ${{ github.workspace }}/${{ env.CUSTOMER_FILE }} 
+        uses: actions/checkout@v3           
       - name: Convert customer yaml to json
         uses: fabasoad/data-format-converter-action@main
         id: yaml2json
         with:
-          input: ${{ github.workspace }}/${{ env.CUSTOMER_FILE }} 
+          input: ${{ github.workspace }}/${{ inputs.customers }} 
           from: "yaml"
           to: "json"
     
