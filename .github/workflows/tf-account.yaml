@@ -50,7 +50,7 @@ jobs:
       - name: Create a default customer file (if not provided)
         if: env.customer_file == ''
         run: |
-          echo 'customers:' >> ${{ github.workspace }}/.github/customers.yml
+          echo 'customers:' > ${{ github.workspace }}/.github/customers.yml
           echo '  - name: default' >> ${{ github.workspace }}/.github/customers.yml
           echo "CUSTOMER_FILE='.github/customers.yml'" >> $GITHUB_ENV  
       - name: Print 
