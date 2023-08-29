@@ -102,7 +102,7 @@ jobs:
             echo 'provider "observe" {' >> override.tf
             echo '  customer = "${{ matrix.customers.customer }}"' >> override.tf     
             echo '  domain   = "${{ matrix.customers.domain }}"' >> override.tf                   
-            if [[ -n "${{ matrix.customers.user_email }}" && -n "${{ secrets[matrix.customers.user_password_actions_secret_name]}}" ]]; then
+            if [ -n "${{ matrix.customers.user_email }}"] & [ -n "${{ secrets[matrix.customers.user_password_actions_secret_name]}}" ]; then
               echo '  user_email    = "${{ matrix.customers.user_email }}"' >> override.tf
               echo '  user_password = ''${{secrets[matrix.customers.user_password_actions_secret_name]}}''' >> override.tf
             fi       
