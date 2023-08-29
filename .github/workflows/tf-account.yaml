@@ -107,8 +107,7 @@ jobs:
               echo '  user_password = ''${{secrets[matrix.customers.user_password_actions_secret_name]}}''' >> override.tf
             fi       
             echo '}' >> override.tf             
-            cat override.tf 
-            #terraform fmt -diff
+            cat override.tf           
             
       - name: Terraform Format
         id: fmt
