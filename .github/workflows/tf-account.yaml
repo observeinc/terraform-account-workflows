@@ -108,6 +108,7 @@ jobs:
             fi       
             echo '}' >> override.tf             
             cat override.tf 
+            terraform fmt -diff
             
       - name: Terraform Format
         id: fmt
