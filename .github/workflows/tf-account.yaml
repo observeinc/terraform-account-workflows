@@ -99,17 +99,23 @@ jobs:
         if: matrix.customers.name != 'default'
         shell: bash 
         run: |
-            echo '::debug::${{ toJson(matrix) }}'           
-            echo 'provider "observe" {' >> override.tf
-            echo '  customer = "${{ matrix.customers.customer }}"' >> override.tf     
-            echo '  domain   = "${{ matrix.customers.domain }}"' >> override.tf                   
-            if [[ -n "${{ matrix.customers.user_email }}" && -n "${{ secrets[matrix.customers.user_password_actions_secret_name]}}" ]]; then
-              echo '  user_email    = "${{ matrix.customers.user_email }}"' >> override.tf
-              echo '  user_password = ''${{secrets[matrix.customers.user_password_actions_secret_name]}}''' >> override.tf
-            fi       
-            echo '}' >> override.tf             
-            cat override.tf 
-          
+            echo "::debug::${{ toJson(matrix) }}"
+            sudo apt-get install -qq -y jo
+            if [ -n "${{ matrix.customers.user_email }}" ] && [ -n "${{matrix.customers.user_password_actions_secret_name}}" ]; then
+                override_json=$(jo -p provider=$(jo \
+                    observe[]=$(jo \
+                    customer=${{ matrix.customers.customer }} \
+                    domain=${{ matrix.customers.domain }} \
+                    user_email=${{ matrix.customers.user_email }} \
+                    user_password=${{secrets[matrix.customers.user_password_actions_secret_name]}})))
+            else
+                override_json=$(jo -p provider=$(jo \
+                    observe[]=$(jo \
+                    customer=${{ matrix.customers.customer }} \
+                    domain=${{ matrix.customers.domain }})))
+            fi        
+            echo "$override_json" > override.tf.json
+            echo "::debug::$override_json"            
             
       - name: Terraform Format
         id: fmt
@@ -202,6 +208,6 @@ jobs:
         run: exit 1
 
       - name: Terraform Apply
-        #if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
         run: terraform apply -auto-approve
         
