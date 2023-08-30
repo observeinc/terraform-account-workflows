@@ -185,7 +185,7 @@ jobs:
 
             const workflowSummaryURL = '${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}'
 
-            const output = `#### Workspace \`${{ matrix.workspace }}\`
+            const output = `#### Workspace \`${{ matrix.customers.name }}\`
             #### Terraform Format and Style 🖌\`${{ steps.fmt.outcome }}\`
             #### Terraform Initialization ⚙️\`${{ steps.init.outcome }}\`
             #### Terraform Validation 🤖\`${{ steps.validate.outcome }}\`
