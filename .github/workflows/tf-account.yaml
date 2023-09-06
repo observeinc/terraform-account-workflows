@@ -150,6 +150,7 @@ jobs:
         id: plan
         if: github.event_name == 'pull_request' 
         run: |
+          set +e 
           path='plan'
           txt_path='plan.txt'
           terraform plan -no-color -out="$path"
@@ -158,13 +159,13 @@ jobs:
         continue-on-error: true
       
       - uses: actions/upload-artifact@v3
-       #if: steps.plan.outcome == 'success'
+        if: steps.plan.outcome == 'success'
         with:
           name: plan
           path: ${{ steps.plan.outputs.path }}
 
       - name: Add Plan to Job Summary
-        #if: steps.plan.outcome == 'success'
+        if: steps.plan.outcome == 'success'
         run: |
           {
             echo '# Terraform Plan'
