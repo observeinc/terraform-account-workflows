@@ -176,7 +176,7 @@ jobs:
           {
             echo '# Terraform Plan'
             echo '```'
-            cat "${{ steps.plan.outputs.path }}"
+            cat "${{ steps.echo-plan.outputs.path }}"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
