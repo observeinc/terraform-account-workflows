@@ -169,7 +169,7 @@ jobs:
           {
             echo '# Terraform Plan'
             echo '```'
-            //cat "${{ steps.plan.outputs.stdout}}"
+            ## cat "${{ steps.plan.outputs.stdout}}"
             echo "${{ steps.plan.outputs.stdout}}"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
