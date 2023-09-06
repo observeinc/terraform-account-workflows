@@ -151,10 +151,10 @@ jobs:
         if: github.event_name == 'pull_request' 
         continue-on-error: true
         run: |        
-           path='plan'
+          path='plan'
           txt_path='plan.txt'
           terraform plan -no-color -out="$path"
-         # terraform show -no-color "$path" > "$txt_path"
+          terraform show -no-color "$path" > "$txt_path"
 
       - name: Echo plan output to a file
         id: echo-plan
