@@ -168,9 +168,8 @@ jobs:
         run: |
           {
             echo '# Terraform Plan'
-            echo '```'
-            ## cat "${{ steps.plan.outputs.stdout}}"
-            echo "${{ steps.plan.outputs.stdout}}"
+            echo '```'   
+            ${{ steps.plan.outputs.stdout}}
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
