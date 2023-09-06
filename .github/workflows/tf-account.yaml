@@ -191,7 +191,11 @@ jobs:
             #### Terraform Plan 📖\`${{ steps.plan.outcome }}\`
             <details><summary>Show <a href="${workflowSummaryURL}">Plan</a></summary>
 
-            ${plan.length <= MAX_PLAN_LENGTH ? plan : `_The plan is too large to include in a comment, open the [workflow summary](${workflowSummaryURL}) to view it._`}
+            \`\`\`\n
+            ${plan}
+            \`\`\`
+            
+            //${plan.length <= MAX_PLAN_LENGTH ? plan : `_The plan is too large to include in a comment, open the [workflow summary](${workflowSummaryURL}) to view it._`}
             </details>
 
             **Pusher**: @${{ github.actor }}, **Action**: \`${{ github.event_name }}\``;
