@@ -152,7 +152,6 @@ jobs:
         run: |
           path='plan'
           txt_path='plan.txt'
-          echo "path=${txt_path}" >> $GITHUB_OUTPUT
           terraform plan -no-color -out="$path"
           terraform show -no-color "$path" > "$txt_path"
           echo "path=${txt_path}" >> $GITHUB_OUTPUT
@@ -182,8 +181,12 @@ jobs:
           script: |
             const fs = require('fs')
             const MAX_PLAN_LENGTH = 60000 // Max comment length is 65536
-            const plan = '```\n' + fs.readFileSync('${{ steps.plan.outputs.path }}', 'utf8') + '\n```'
-
+            if (fs.existsSync('${{ steps.plan.outputs.path }}')) {
+              const plan = '```\n' + fs.readFileSync('${{ steps.plan.outputs.path }}', 'utf8') + '\n```'
+            }
+            else {
+              const plan =''
+            }         
             const workflowSummaryURL = '${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}'
 
             const output = `#### Workspace \`${{ matrix.customers.name }}\`
