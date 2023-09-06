@@ -156,10 +156,7 @@ jobs:
       - name: Echo plan output to a file
         id: echo-plan
         run: |
-          echo ${{ steps.plan.outputs.stdout }}
-          echo ${{ steps.plan.outputs.stderr }}
-          echo ${{ steps.plan.outputs.exitcode }}
-          plan_output=${{ steps.plan.outputs.stdout }} || ${{ steps.plan.outputs.stderr}}
+          plan_output=${{ steps.plan.outputs.stdout }}
           txt_path='plan.txt'
           echo "plan_output" > "$txt_path"
           echo "path=${txt_path}" >> $GITHUB_OUTPUT
