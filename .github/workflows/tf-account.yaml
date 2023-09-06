@@ -151,7 +151,8 @@ jobs:
         if: github.event_name == 'pull_request' 
         continue-on-error: true
         run: |
-          terraform plan -no-color           
+          path='plan'
+          terraform plan -no-color -out="$path"    
 
       - name: Echo plan output to a file
         id: echo-plan
@@ -159,7 +160,7 @@ jobs:
           #plan_output="${{ steps.plan.outputs.stdout }}"
           txt_path='plan.txt'
           #echo "plan_output" > "$txt_path"
-          echo "${{ steps.plan.outputs.stdout }} ${{ steps.plan.outputs.stderr }}"  > "$txt_path"
+          echo "${{ steps.plan.outputs.stdout }}"  > "$txt_path"
           echo "path=${txt_path}" >> $GITHUB_OUTPUT
       
       - uses: actions/upload-artifact@v3
