@@ -155,16 +155,16 @@ jobs:
           terraform plan -no-color -out="$path"
           terraform show -no-color "$path" > "$txt_path"
           echo "path=${txt_path}" >> $GITHUB_OUTPUT
-        #continue-on-error: true
+        continue-on-error: true
       
       - uses: actions/upload-artifact@v3
-        if: steps.plan.outcome == 'success'
+       #if: steps.plan.outcome == 'success'
         with:
           name: plan
           path: ${{ steps.plan.outputs.path }}
 
       - name: Add Plan to Job Summary
-        if: steps.plan.outcome == 'success'
+        #if: steps.plan.outcome == 'success'
         run: |
           {
             echo '# Terraform Plan'
