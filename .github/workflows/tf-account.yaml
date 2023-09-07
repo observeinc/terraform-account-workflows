@@ -152,7 +152,7 @@ jobs:
         run: |
           path='plan'
           txt_path='plan.txt'
-          touch $txt_path
+          touch $txt_path && echo "path=${txt_path}" >> $GITHUB_OUTPUT
           terraform plan -no-color -out="$path";
           terraform show -no-color "$path" > "$txt_path"
           echo "path=${txt_path}" >> $GITHUB_OUTPUT
