@@ -113,7 +113,8 @@ jobs:
                     observe[]=$(jo \
                     customer=${{ matrix.customers.customer }} \
                     domain=${{ matrix.customers.domain }}))
-            fi > override.tf.json                        
+            fi > override.tf.json         
+            cat override.tf.json               
             
       - name: Terraform Format
         id: fmt
@@ -143,8 +144,8 @@ jobs:
         id: workspace
         run: |         
           terraform workspace select -or-create=true ${{ matrix.customers.name }}
-          #workspace='$(terraform workspace show)'
-          echo "workspace='$(terraform workspace show)'" >> $GITHUB_OUTPUT
+          workspace='$(terraform workspace show)'
+          echo "workspace=${workspace}" >> $GITHUB_OUTPUT
 
       - name: Terraform Plan
         id: plan
