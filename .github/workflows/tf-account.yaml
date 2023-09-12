@@ -143,8 +143,8 @@ jobs:
         id: workspace
         run: |         
           terraform workspace select -or-create=true ${{ matrix.customers.name }}
-          workspace='$(terraform workspace show)'
-          echo "workspace=${workspace}" >> $GITHUB_OUTPUT
+          #workspace='$(terraform workspace show)'
+          echo "workspace='$(terraform workspace show)'" >> $GITHUB_OUTPUT
 
       - name: Terraform Plan
         id: plan
