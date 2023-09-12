@@ -100,22 +100,20 @@ jobs:
         shell: bash 
         run: |
             echo "::debug::${{ toJson(matrix) }}"
-            sudo apt-get install -qq -y jo
+            sudo apt-get install --quiet=2 --assume-yes jo
             if [ -n "${{ matrix.customers.user_email }}" ] && [ -n "${{matrix.customers.user_password_actions_secret_name}}" ]; then
-                override_json=$(jo -p provider=$(jo \
+                jo -p provider=$(jo \
                     observe[]=$(jo \
                     customer=${{ matrix.customers.customer }} \
                     domain=${{ matrix.customers.domain }} \
                     user_email=${{ matrix.customers.user_email }} \
-                    user_password=${{secrets[matrix.customers.user_password_actions_secret_name]}})))
+                    user_password=${{secrets[matrix.customers.user_password_actions_secret_name]}}))
             else
-                override_json=$(jo -p provider=$(jo \
+                jo -p provider=$(jo \
                     observe[]=$(jo \
                     customer=${{ matrix.customers.customer }} \
-                    domain=${{ matrix.customers.domain }})))
-            fi        
-            echo "$override_json" > override.tf.json
-            echo "::debug::$override_json"            
+                    domain=${{ matrix.customers.domain }}))
+            fi > override.tf.json                        
             
       - name: Terraform Format
         id: fmt
@@ -145,6 +143,7 @@ jobs:
         id: workspace
         run: |         
           terraform workspace select -or-create=true ${{ matrix.customers.name }}
+          echo "workspace=$(terraform workspace show)" >> $GITHUB_OUTPUT
 
       - name: Terraform Plan
         id: plan
@@ -186,7 +185,7 @@ jobs:
 
             const workflowSummaryURL = '${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}'
 
-            const output = `#### Workspace \`${{ matrix.customers.name }}\`
+            const output = `#### Workspace \`${{ steps.workspace.outputs.workspace}}\`
             #### Terraform Format and Style 🖌\`${{ steps.fmt.outcome }}\`
             #### Terraform Initialization ⚙️\`${{ steps.init.outcome }}\`
             #### Terraform Validation 🤖\`${{ steps.validate.outcome }}\`
