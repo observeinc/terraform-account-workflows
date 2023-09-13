@@ -153,11 +153,11 @@ jobs:
           txt_path='plan.txt'
           var_file=${{ steps.workspace.outputs.workspace}}.tfvars
           touch $txt_path && echo "path=${txt_path}" >> $GITHUB_OUTPUT
-          if [ ! -e "$var_file" ]; then           
-            terraform plan -no-color -out="$path";    
-          else           
-            terraform plan -var-file=$var_file -no-color -out="$path";     
-          fi         
+          plan_args=()
+          if [ -e "$var_file" ]; then           
+            plan_args+=("-var-file=$var_file") 
+          fi
+          terraform plan "${plan_args[@]}" -no-color -out="$path"
           terraform show -no-color "$path" > "$txt_path"
           echo "path=${txt_path}" >> $GITHUB_OUTPUT
         continue-on-error: true
