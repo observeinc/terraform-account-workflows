@@ -158,7 +158,7 @@ jobs:
             terraform plan -no-color -out="$path";    
           else
             echo "The file '$var_file' exists."    
-            terraform plan -var-file=”$var_file” -no-color -out="$path";     
+            terraform plan -var-file=$var_file -no-color -out="$path";     
           fi
           #terraform plan -no-color -out="$path";
           terraform show -no-color "$path" > "$txt_path"
