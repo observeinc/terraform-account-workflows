@@ -151,13 +151,14 @@ jobs:
         run: |
           path='plan'
           txt_path='plan.txt'
+          var_file=${{ steps.workspace.outputs.workspace}}.tfvars
           touch $txt_path && echo "path=${txt_path}" >> $GITHUB_OUTPUT
-          if [ ! -e "${{ steps.workspace.outputs.workspace}}.tfvars" ]; then
-            echo "The file '$workspace.tfvars' does not exist."     
+          if [ ! -e "$var_file" ]; then
+            echo "The file '$var_file' does not exist."     
             terraform plan -no-color -out="$path";    
           else
-            echo "The file '${{ steps.workspace.outputs.workspace}}.tfvars' exists."    
-            terraform plan -var-file=”prod.tfvars” -no-color -out="$path";     
+            echo "The file '$var_file' exists."    
+            terraform plan -var-file=”$var_file” -no-color -out="$path";     
           fi
           #terraform plan -no-color -out="$path";
           terraform show -no-color "$path" > "$txt_path"
