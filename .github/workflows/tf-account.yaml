@@ -151,7 +151,7 @@ jobs:
         run: |
           path='plan'
           txt_path='plan.txt'
-          var_file=workspaces/${{ steps.workspace.outputs.workspace}}.tfvars
+          var_file=tenants/${{ steps.workspace.outputs.workspace}}.tfvars
           touch $txt_path && echo "path=${txt_path}" >> $GITHUB_OUTPUT
           plan_args=()
           if [ -e "$var_file" ]; then           
