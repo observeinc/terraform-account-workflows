@@ -220,7 +220,6 @@ jobs:
           if [ -e "$var_file" ]; then           
             apply_args+=("-var-file=$var_file") 
           fi
-          terraform apply "${apply_args[@]}" -auto-approve
-          terraform apply -auto-approve
+          terraform apply "${apply_args[@]}" -auto-approve       
          
         
