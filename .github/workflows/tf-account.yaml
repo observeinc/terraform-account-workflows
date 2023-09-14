@@ -215,11 +215,12 @@ jobs:
       - name: Terraform Apply
         if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
         run: |
-          var_file=customers/${{ steps.workspace.outputs.workspace}}.tfvars
-          apply_args=()
-          if [ -e "$var_file" ]; then           
-            apply_args+=("-var-file=$var_file") 
-          fi
-          terraform apply "${apply_args[@]}" -auto-approve
+          # var_file=customers/${{ steps.workspace.outputs.workspace}}.tfvars
+          # apply_args=()
+          # if [ -e "$var_file" ]; then           
+          #   apply_args+=("-var-file=$var_file") 
+          # fi
+          # terraform apply "${apply_args[@]}" -auto-approve
+          terraform apply -auto-approve
          
         
