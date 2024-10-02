@@ -11,10 +11,8 @@ on:
       TF_BACKEND_S3_KEY:
         required: true
       TF_BACKEND_S3_REGION:
-        required: true
-      TS_OAUTH_CLIENT_ID:
-        required: false
-      TS_OAUTH_SECRET:
+        required: true      
+      TWINGATE_SERVICE_KEY:
         required: false
     
     inputs:
@@ -23,9 +21,10 @@ on:
         required: false
         type: string
         default: '1.5.4'
-      tailscale-tags:
+      twingate-enabled:
         required: false
-        type: string
+        type: boolean
+        default: false      
       https-proxy:
         required: false
         type: string
@@ -75,14 +74,11 @@ jobs:
         with:
           terraform_version: ${{ inputs.terraform-version }}
 
-      - name: Tailscale
-        uses: tailscale/github-action@v2
-        # a tailscale oauth client requires tags
-        if: inputs.tailscale-tags != ''
+      - name: Twingate
+        uses: twingate/github-action@v1
+        if: inputs.twingate-enabled
         with:
-          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
-          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
-          tags: ${{ inputs.tailscale-tags }}
+          service-key: ${{ secrets.TWINGATE_SERVICE_KEY }}   
 
       - name: Config Proxy Environment Variables
         if: inputs.https-proxy != ''
