@@ -45,7 +45,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3           
       - name: Convert customer yaml to json
-        uses: fabasoad/data-format-converter-action@main
+        uses: fabasoad/data-format-converter-action@v0.3.0
         id: yaml2json
         with:
           input: ${{ github.workspace }}/${{ inputs.customers }} 
