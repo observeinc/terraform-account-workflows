@@ -175,7 +175,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: steps.plan.outcome == 'success'
         with:
-          name: plan
+          name: plan-${{ matrix.customers.name }}-${{ strategy.job-index }}
           path: ${{ steps.plan.outputs.path }}
 
       - name: Add Plan to Job Summary
