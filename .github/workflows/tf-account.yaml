@@ -139,7 +139,7 @@ jobs:
       - name: Terraform Init
         id: init
         run: |
-          terraform init -no-color \
+          terraform init -update -no-color \
             -backend-config="bucket=${{ secrets.TF_BACKEND_S3_BUCKET }}" \
             -backend-config="key=${{ secrets.TF_BACKEND_S3_KEY }}" \
             -backend-config="region=${{ secrets.TF_BACKEND_S3_REGION }}" \
