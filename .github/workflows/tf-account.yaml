@@ -35,6 +35,11 @@ on:
         required: true
         type: string 
         description: YAML file of customers to apply TF-Account Config to 
+      role-duration-seconds:
+        required: false
+        type: number
+        description: How long to check out the AWS role for. Terraform runs must finish within this time to successfully upload the state back.
+      
 
 jobs: 
   build_matrix:
@@ -121,7 +126,7 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           role-session-name: ${{ github.sha }}
           aws-region: ${{ secrets.AWS_REGION }}
-          role-duration-seconds: 14400
+          role-duration-seconds: $${{ inputs.role-duration-seconds }}
 
       - name: Synchronize secrets
         env:
