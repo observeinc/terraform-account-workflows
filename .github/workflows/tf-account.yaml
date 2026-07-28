@@ -121,6 +121,7 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           role-session-name: ${{ github.sha }}
           aws-region: ${{ secrets.AWS_REGION }}
+          role-duration-seconds: 14400
 
       - name: Synchronize secrets
         env:
