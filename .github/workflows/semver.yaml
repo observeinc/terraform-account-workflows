@@ -10,4 +10,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+        with:
+          fetch-tags: true
+      - name: Skip if not highest semver
+        id: guard
+        run: |
+          PUSHED="${GITHUB_REF_NAME}"
+          LATEST=$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' | sort -V | tail -1)
+          if [[ "$PUSHED" != "$LATEST" ]]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
       - uses: haya14busa/action-update-semver@v1
+        if: steps.guard.outputs.skip != 'true'
