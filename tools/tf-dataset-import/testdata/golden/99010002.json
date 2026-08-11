@@ -1,0 +1,6 @@
+{
+  "dataSource": "",
+  "resource": "\nresource \"observe_dataset\" \"new_two\" {\n    acceleration_disabled = true\n    data_table_view_state = jsonencode(\n        {\n            columnVisibility = [\n                [\n                    \"clusterUid\",\n                    false,\n                ],\n            ]\n            viewType         = \"Auto\"\n        }\n    )\n    entity_tags           = {}\n    inputs                = {\n        \"only_data_source\" = \"o:::dataset:99002000\"\n    }\n    name                  = \"Fake/New Dataset Two\"\n    object_tags           = {}\n    storage_integration   = \"o:::storageintegration:99003000\"\n    workspace             = \"o:::workspace:99000001\"\n\n    stage {\n        output_stage = false\n        pipeline     = <<-EOT\n            filter true\n        EOT\n    }\n}\n",
+  "importId": "99010002",
+  "importName": "new_two"
+}

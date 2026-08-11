@@ -1,0 +1,259 @@
+name: Import or update an Observe dataset
+on:
+  workflow_call:
+    inputs:
+      dataset-ids:
+        description: 'Comma-separated Observe dataset ids (numeric), from the account repo''s primary tenant'
+        required: true
+        type: string
+      module-dir:
+        description: 'Repo-relative module directory tf-dataset-import writes into, e.g. modules/capone'
+        required: true
+        type: string
+      terraform-workspace:
+        description: 'Terraform CLI workspace holding the primary tenant''s state'
+        required: false
+        type: string
+        default: 'default'
+      import-gate:
+        description: >-
+          HCL boolean true only in the primary tenant's workspace, e.g. local.in_west. Leave empty
+          for a single-tenant account repo (the common case) -- only a repo serving more than one
+          tenant from the same module needs this, and setting it requires Terraform >= 1.7.
+        required: false
+        type: string
+        default: ''
+      terraform-version:
+        description: 'Terraform version'
+        required: false
+        type: string
+        default: '1.5.4'
+      twingate-enabled:
+        description: 'Connect to Twingate before talking to AWS/Observe -- needed for any tenant with IP-restricted API access'
+        required: false
+        type: boolean
+        default: false
+    secrets:
+      AWS_ROLE_TO_ASSUME:
+        required: true
+      AWS_REGION:
+        required: true
+      TF_BACKEND_S3_BUCKET:
+        required: true
+      TF_BACKEND_S3_KEY:
+        required: true
+      TF_BACKEND_S3_REGION:
+        required: true
+      TWINGATE_SERVICE_KEY:
+        required: false
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write      # for the AWS OIDC role assumption
+      contents: write      # to push the branch
+      pull-requests: write # to open/update the PR
+    steps:
+      # Fails in seconds rather than after a full checkout/build/terraform-init cycle.
+      - name: Validate dataset-ids
+        env:
+          DATASET_IDS: ${{ inputs.dataset-ids }}
+        run: |
+          # Matches what the tool itself accepts (config.go splits on comma/space/tab), just
+          # requiring a comma between ids rather than bare whitespace, for a clearer error here
+          # on an obvious typo rather than a less obvious one from the tool itself later.
+          if ! [[ "$DATASET_IDS" =~ ^[0-9]+([[:space:]]*,[[:space:]]*[0-9]+)*$ ]]; then
+            echo "::error::dataset-ids must be a comma-separated list of numeric ids, got: $DATASET_IDS"
+            exit 2
+          fi
+
+      - name: Checkout account repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout terraform-account-workflows (for tf-dataset-import source)
+        uses: actions/checkout@v4
+        with:
+          repository: observeinc/terraform-account-workflows
+          # TODO: switch to main once tf-dataset-import merges. Pinned to this
+          # branch for now because tools/tf-dataset-import doesn't exist on main yet.
+          ref: tf-dataset-import
+          path: _import-workflow-src
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+
+      - name: Build tf-dataset-import
+        run: |
+          cd _import-workflow-src/tools/tf-dataset-import
+          go build -o "$RUNNER_TEMP/tf-dataset-import" .
+
+      - uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: ${{ inputs.terraform-version }}
+          # The wrapper exists to capture plan/apply output into step outputs (steps.*.outputs.
+          # stdout etc.), which nothing here uses. Left enabled, it interleaves extra content into
+          # stdout that breaks a direct `terraform state pull > file.json` redirect -- state.json
+          # ends up with a stray non-JSON byte at the start and tf-dataset-import fails to parse it.
+          # This is a known, documented setup-terraform issue; disabling the wrapper is the fix.
+          terraform_wrapper: false
+
+      # Needed for any tenant with IP-restricted API access
+      - name: Twingate
+        uses: twingate/github-action@v1
+        if: inputs.twingate-enabled
+        with:
+          service-key: ${{ secrets.TWINGATE_SERVICE_KEY }}
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          role-session-name: ${{ github.sha }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      # terraform init only configures the S3 backend; it does not leave a readable state file on
+      # disk. `terraform state pull` is what actually fetches it -- `terraform show -json` is a
+      # different, incompatible schema and is not a substitute here.
+      - name: Terraform init
+        run: |
+          terraform init -no-color \
+            -backend-config="bucket=${{ secrets.TF_BACKEND_S3_BUCKET }}" \
+            -backend-config="key=${{ secrets.TF_BACKEND_S3_KEY }}" \
+            -backend-config="region=${{ secrets.TF_BACKEND_S3_REGION }}" \
+            -backend-config="workspace_key_prefix=${{ github.event.repository.name }}"
+
+      - name: Select the primary tenant's workspace and pull its state
+        env:
+          TF_WORKSPACE_NAME: ${{ inputs.terraform-workspace }}
+        run: |
+          terraform workspace select "$TF_WORKSPACE_NAME"
+          terraform state pull > "$RUNNER_TEMP/state.json"
+
+      # Same Secrets Manager blob tf-account.yaml already reads (named after the calling repo);
+      # this only reads it, never writes.
+      - name: Read Observe credentials
+        id: observe-creds
+        run: |
+          secret="$(aws secretsmanager get-secret-value --secret-id ${{ github.event.repository.name }} | jq -r .SecretString)"
+          {
+            echo "customer-id=$(echo "$secret" | jq -r .OBSERVE_CUSTOMER)"
+            echo "domain=$(echo "$secret" | jq -r '.OBSERVE_DOMAIN // "observeinc.com"')"
+          } >> "$GITHUB_OUTPUT"
+          token="$(echo "$secret" | jq -r .OBSERVE_API_TOKEN)"
+          # GitHub only auto-redacts values sourced from the `secrets` context; this one was
+          # fetched dynamically from Secrets Manager, so it needs an explicit mask before it
+          # touches any file or output that might get echoed later in the job.
+          echo "::add-mask::$token"
+          echo "$token" > "$RUNNER_TEMP/.observe-token"
+
+      - name: Run tf-dataset-import
+        id: run
+        env:
+          OBSERVE_TOKEN_FILE: ${{ runner.temp }}/.observe-token
+          DATASET_IDS: ${{ inputs.dataset-ids }}
+          MODULE_DIR: ${{ inputs.module-dir }}
+          IMPORT_GATE: ${{ inputs.import-gate }}
+          CUSTOMER_ID: ${{ steps.observe-creds.outputs.customer-id }}
+          OBSERVE_DOMAIN_VALUE: ${{ steps.observe-creds.outputs.domain }}
+        run: |
+          set +e
+          args=(
+            -dataset-ids "$DATASET_IDS"
+            -customer-id "$CUSTOMER_ID"
+            -domain "$OBSERVE_DOMAIN_VALUE"
+            -repo "$GITHUB_WORKSPACE"
+            -module-dir "$MODULE_DIR"
+            -state "$RUNNER_TEMP/state.json"
+            -out "$RUNNER_TEMP/tf-dataset-import-out"
+          )
+          [ -n "$IMPORT_GATE" ] && args+=(-import-gate "$IMPORT_GATE")
+          # Captured to a file (in addition to the normal step log) so a hard failure -- which
+          # means report.json was never written -- still has something concrete to show in the
+          # job summary, instead of a bare "no report.json" that sends you digging through raw
+          # logs for the actual error.
+          OBSERVE_TOKEN="$(cat "$OBSERVE_TOKEN_FILE")" "$RUNNER_TEMP/tf-dataset-import" "${args[@]}" 2>&1 | tee "$RUNNER_TEMP/tf-dataset-import-run.log"
+          echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+          rm -f "$OBSERVE_TOKEN_FILE"
+          set -e
+
+      - name: Surface the report
+        if: always()
+        env:
+          EXIT_CODE: ${{ steps.run.outputs.exit_code }}
+        run: |
+          report="$RUNNER_TEMP/tf-dataset-import-out/report.json"
+          if [ -f "$report" ]; then
+            echo '## tf-dataset-import report' >> "$GITHUB_STEP_SUMMARY"
+            echo '```json' >> "$GITHUB_STEP_SUMMARY"
+            cat "$report" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          else
+            # No report.json means it failed before writing one -- show what it actually printed
+            # instead of a bare "nothing to see here", so the error is readable from the summary
+            # without digging into raw step logs.
+            echo "## tf-dataset-import failed (exit code ${EXIT_CODE:-unknown}) before writing a report" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            cat "$RUNNER_TEMP/tf-dataset-import-run.log" >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || echo '(no output captured -- the run never got as far as invoking tf-dataset-import)' >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Fail the job on a hard error
+        if: steps.run.outputs.exit_code == '1' || steps.run.outputs.exit_code == '2'
+        run: exit 1
+        # Exit 3 ("needs attention" -- a collision, an unwired reference, etc.) is not a hard
+        # failure: report.json's `needs_attention` field tells you why, and a human reviewing the
+        # PR is how those get resolved.
+
+      # The PR body itself stays static -- peter-evans/create-pull-request overwrites the whole
+      # body on every run, so anything run-specific put there would only ever show the latest run
+      # and silently drop every earlier one. Each run's report goes in its own PR comment instead
+      # (below), the same pattern tf-account.yaml already uses for terraform plan output.
+      - name: Create or update pull request
+        id: pr
+        uses: peter-evans/create-pull-request@v6
+        with:
+          # A single persistent branch, reused across runs regardless of which ids they process --
+          # so a run always adds onto whatever's already open rather than opening a parallel PR.
+          branch: dataset-import
+          delete-branch: true
+          commit-message: "Import/update datasets ${{ inputs.dataset-ids }}"
+          title: "Import/update Observe datasets"
+          body: >
+            Recurring PR for [tf-dataset-import](https://github.com/observeinc/terraform-account-workflows/tree/main/tools/tf-dataset-import)
+            imports/updates. Each run appends a commit here and comments its own report below --
+            see the comments for what's included and whether anything needs attention.
+          # Only a label on exit 3 ("needs attention"); nothing added for a clean run.
+          labels: ${{ steps.run.outputs.exit_code == '3' && 'needs-attention' || '' }}
+          # Draft on exit 3 as a visible "not ready to merge" signal, separate from the label --
+          # also sets up the eventual auto-merge goal to naturally gate on non-draft.
+          draft: ${{ steps.run.outputs.exit_code == '3' }}
+          add-paths: |
+            ${{ inputs.module-dir }}/*.tf
+            main.tf
+            imports.tf
+
+      - name: Comment this run's report on the PR
+        if: steps.pr.outputs.pull-request-number
+        uses: actions/github-script@v7
+        env:
+          DATASET_IDS: ${{ inputs.dataset-ids }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        with:
+          script: |
+            const fs = require('fs')
+            let report = '(no report.json -- the run errored before writing one)'
+            try {
+              report = fs.readFileSync(`${process.env.RUNNER_TEMP}/tf-dataset-import-out/report.json`, 'utf8')
+            } catch {}
+            const body = `Ran for dataset id(s) \`${process.env.DATASET_IDS}\`, triggered by @${context.actor}. [Full run](${process.env.RUN_URL}).\n\n` +
+              '```json\n' + report + '\n```'
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: ${{ steps.pr.outputs.pull-request-number }},
+              body,
+            })
