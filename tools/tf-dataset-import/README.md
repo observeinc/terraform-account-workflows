@@ -60,18 +60,23 @@ is a normal, successful outcome and does *not* set `3` — see `report.json` (or
 `Report.FreshnessUpdated`) for that detail; a wrapper deciding whether to open or update a PR should
 read that file rather than infer everything from the exit code.
 
-**Nothing is overwritten that this tool doesn't already own.** A run aborts before writing if a
-destination `<name>.tf` exists and declares something other than the dataset (plus its correlation
-tags and RBAC grants) being written under that name — so a dataset whose generated name happens to be
-`main` cannot replace the module's `main.tf`. A dataset the module already declares *is* overwritten,
-deliberately: that overwrite, from the dataset's current live definition, is the update mechanism.
-See [Running it twice](#running-it-twice).
+**Nothing is overwritten that this tool doesn't already own.** For a genuinely new dataset, a run
+aborts before writing if the destination `<name>.tf` exists and declares something other than the
+dataset (plus its correlation tags and RBAC grants) being written under that name — so a dataset
+whose generated name happens to be `main` cannot replace the module's `main.tf`. A dataset the module
+already declares is updated in place instead, deliberately: its own resource block — wherever it
+already lives, which may be a file declaring several other resources too — is replaced with its
+current live definition, and that replacement is the update mechanism. It is never written to a new
+`<name>.tf` file; doing so would declare the same resource address twice and fail `terraform
+validate`. See [Running it twice](#running-it-twice).
 
 ## What it produces
 
-- One `.tf` file per dataset in the module directory, `terraform fmt`-clean. No header or marker —
-  once written, it is meant to look exactly like a dataset a human added by hand, and it is fine to
-  hand-edit afterwards (though a later re-run for that id will overwrite the edit; see below).
+- One `.tf` file per *new* dataset in the module directory, `terraform fmt`-clean. No header or
+  marker — once written, it is meant to look exactly like a dataset a human added by hand, and it is
+  fine to hand-edit afterwards (though a later re-run for that id will overwrite the edit; see
+  below). An *already-managed* dataset is not written to a new file at all — its existing resource
+  block, in whatever file already declares it, is updated in place.
 - Per-dataset freshness values kept in sync in the root module block's `freshness_overrides` map —
   added if missing, updated if Observe's current value differs from what's there.
 - `imports.tf`, in the repo root — see [How the import happens](#how-the-import-happens). Only
@@ -121,18 +126,24 @@ second file.
    state, or by name in the config, whoever declared it — keeps its existing resource name; anything
    else gets a freshly derived one. A name already taken by something else (for a genuinely new
    dataset) stops the run.
-5. **Check the destination files.** A `<name>.tf` that exists and declares something other than the
-   dataset being written under that name stops the run. An update target — a file that already
-   declares exactly this dataset — is not a conflict. Nothing has been written up to this point, so
-   both gates are free to abort.
+5. **Check the destination files, for genuinely new datasets only.** A `<name>.tf` that exists and
+   declares something other than the dataset being written under that name stops the run. An
+   already-managed dataset is not checked here at all: its destination is resolved from where it is
+   already declared (step 1's scan), not from the `<name>.tf` convention, so there is nothing at that
+   convention path for it to collide with. Nothing has been written up to this point, so both gates
+   are free to abort.
 6. **Build the oid → reference map** by joining the state index to the repo's bindings, plus the names
    just assigned — the datasets in the batch may reference each other, and a new one is not in state
    yet.
 7. **Rewrite each dataset:** resolve every oid to a portable reference, convert `freshness` to the
    repo's lookup, drop the handful of attributes a resource cannot accept, and reorder the rest to
    repo convention. A dataset that fails is reported; the others still go through.
-8. **Write.** One `.tf` per dataset (new or updated), `freshness_overrides` entries added or brought
-   in sync, then `terraform fmt` over the files just written and nothing else.
+8. **Write.** A new dataset gets its own `.tf` file; an already-managed dataset's resource block (and,
+   if it has any, its grants companion) is spliced into the exact byte range it already occupies in
+   whatever file declares it — replaced in place if that block already existed, inserted right next
+   to the dataset if it's a grants block acquired since the last run. `freshness_overrides` entries
+   are added or brought in sync the same way, then `terraform fmt` runs over the files just touched
+   and nothing else.
 9. **Append import blocks** to `imports.tf`, for whichever entries actually need one — a dataset
    already managed does not, and neither does a grants resource already managed independently of it.
 10. **Emit the manifest, `report.json` and `rollback.sh`,** and print a report. Exit non-zero if
@@ -218,12 +229,14 @@ not this tool's business.
 ### Running it twice
 
 A dataset id already under the repo's management — whoever put it there, this tool or a human by
-hand — is treated as an update, not skipped: it keeps its existing resource name, and its file is
-regenerated from the dataset's current live definition. If nothing changed in Observe since the last
-run, the regenerated file is byte-for-byte identical to what's already committed, so the diff is
-empty — a genuine no-op. If something did change, the file updates to match, which is the whole point:
-running this again for a dataset id is how a change made in Observe stays in sync in Terraform, not
-just how a dataset gets created once.
+hand — is treated as an update, not skipped: it keeps its existing resource name, and its resource
+block is regenerated from the dataset's current live definition and spliced back into the exact
+place it already occupies — whatever file that is, even one declaring several other datasets too.
+Nothing else in that file is touched. If nothing changed in Observe since the last run, the
+regenerated block is byte-for-byte identical to what's already committed, so the diff is empty — a
+genuine no-op. If something did change, the block updates to match, which is the whole point: running
+this again for a dataset id is how a change made in Observe stays in sync in Terraform, not just how
+a dataset gets created once.
 
 This deliberately does not distinguish "this tool wrote it" from "a human wrote it by hand" — there is
 no marker or header for that anymore. Once a dataset id is under this repo's management at all,

@@ -8,9 +8,19 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/hashicorp/hcl/v2/hclwrite"
+
 	"tfdatasetimport/observe"
 	"tfdatasetimport/tf"
 )
+
+// formatted re-runs hclwrite.Format so two byte slices built by different paths (e.g. one
+// concatenated from pieces, one built as a whole) compare equal on content despite incidental
+// whitespace differences at the seam.
+func formatted(t *testing.T, b []byte) string {
+	t.Helper()
+	return string(hclwrite.Format(b))
+}
 
 const (
 	fakeRepo      = "../testdata/fake-repo"
@@ -561,6 +571,62 @@ func TestRawSubjectGrantEmitsLiteralWithTODO(t *testing.T) {
 	// Unresolved grant emits the raw OID as a string literal with a TODO comment.
 	assertContains(t, got, `# TODO: group o:::rbacgroup:o::100000000000:rbacgroup:9000000001 is not in var.rbac_groups`)
 	assertContains(t, got, `subject = "o:::rbacgroup:o::100000000000:rbacgroup:9000000001"`)
+}
+
+// TestDatasetAndGrantsHCLAreAddressableSeparately covers why an update needs more than HCL: it has
+// to be able to splice just the dataset's own block into an existing file without disturbing
+// whatever else that file declares, and independently decide whether the grants block needs
+// inserting or already exists. DatasetHCL and GrantsHCL are exactly the bytes HCL is built from —
+// this pins that splitting them out changes nothing about what gets emitted, only how it is
+// addressed.
+func TestDatasetAndGrantsHCLAreAddressableSeparately(t *testing.T) {
+	h := newHarness(t, "99010001")
+	grants := []Grant{{GroupName: "TEST-VIEWER", Role: "dataset_viewer"}}
+	w := &Rewriter{Refs: h.refs, FreshnessDefault: "5m"}
+	res, err := w.Rewrite(h.defs["99010001"], "new_one", grants)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(res.DatasetHCL) == 0 {
+		t.Fatal("want a non-empty DatasetHCL")
+	}
+	if len(res.GrantsHCL) == 0 {
+		t.Fatal("want a non-empty GrantsHCL when grants are present")
+	}
+	assertContains(t, string(res.DatasetHCL), `resource "observe_dataset" "new_one"`)
+	if strings.Contains(string(res.DatasetHCL), "observe_resource_grants") {
+		t.Errorf("DatasetHCL must not carry the grants block:\n%s", res.DatasetHCL)
+	}
+	assertContains(t, string(res.GrantsHCL), `resource "observe_resource_grants" "new_one"`)
+	// The grants block legitimately references observe_dataset.new_one.oid — only a second
+	// resource block would mean the dataset got duplicated into GrantsHCL.
+	if strings.Contains(string(res.GrantsHCL), `resource "observe_dataset"`) {
+		t.Errorf("GrantsHCL must not carry the dataset block:\n%s", res.GrantsHCL)
+	}
+
+	// The split is exhaustive and non-lossy: concatenating the pieces back together reproduces HCL,
+	// modulo the blank-line separator HCL inserts between blocks (hclwrite.Format is idempotent on
+	// whitespace, so formatting the concatenation again must match formatting HCL again).
+	rejoined := append(append([]byte{}, res.DatasetHCL...), append([]byte("\n"), res.GrantsHCL...)...)
+	if got, want := formatted(t, rejoined), formatted(t, res.HCL); got != want {
+		t.Errorf("DatasetHCL+GrantsHCL does not reproduce HCL:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestDatasetHCLWithNoGrants covers the common case: a dataset with no grants gets a DatasetHCL and
+// no GrantsHCL, and DatasetHCL alone matches HCL exactly (nothing else is emitted for it).
+func TestDatasetHCLWithNoGrants(t *testing.T) {
+	h := newHarness(t, "99010001")
+	res := h.rewrite("99010001", "new_one")
+
+	if len(res.GrantsHCL) != 0 {
+		t.Errorf("want no GrantsHCL when the dataset has no grants, got:\n%s", res.GrantsHCL)
+	}
+	if string(res.DatasetHCL) != string(res.HCL) {
+		t.Errorf("DatasetHCL should equal HCL when nothing else is emitted:\ngot:\n%s\nwant:\n%s",
+			res.DatasetHCL, res.HCL)
+	}
 }
 
 func TestDataTableViewStateLandsAfterStages(t *testing.T) {

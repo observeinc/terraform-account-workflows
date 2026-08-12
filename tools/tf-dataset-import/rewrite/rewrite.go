@@ -71,7 +71,26 @@ type Result struct {
 	DatasetID    string
 	DatasetName  string
 	ResourceName string
-	HCL          []byte
+	// HCL is the full generated content — dataset, correlation tags (if emitted), and grants (if
+	// any) — in that order. This is what a brand-new resource is written as: a file this tool fully
+	// owns, so there is nothing existing to preserve around it.
+	HCL []byte
+
+	// DatasetHCL is just the observe_dataset resource block, formatted on its own. An update to a
+	// dataset the module already manages needs to replace only its own block's byte range inside
+	// whatever file it already lives in — which may declare other resources too — rather than
+	// overwrite a whole file, so the dataset's own bytes have to be addressable separately from HCL.
+	//
+	// Correlation tags are deliberately not included here: unlike the dataset and its grants
+	// companion, there is no existing index of where a given tag is already declared, so an update
+	// does not attempt to place them in-place. They are still named in CorrelationTags either way.
+	DatasetHCL []byte
+	// GrantsHCL is just the observe_resource_grants resource block, formatted on its own, when this
+	// dataset has any grants. An update needs this separately from DatasetHCL because the two need
+	// different treatment: the dataset's block always exists already (an update means the dataset is
+	// already managed) and gets replaced in place, while the grants block may not exist yet and gets
+	// inserted fresh.
+	GrantsHCL []byte
 
 	// Freshness is the dataset's own value, empty when it has none.
 	Freshness string
@@ -185,6 +204,29 @@ func (w *Rewriter) Rewrite(def *observe.TerraformDefinition, resourceName string
 	// added to the repo by hand, and re-running for a dataset id already under management is how it
 	// stays in sync with Observe going forward regardless of how it first got here.
 	res.HCL = hclwrite.Format(out.Bytes())
+
+	// Extracted from the blocks already built above, not by calling writeDataset/writeResourceGrants
+	// a second time: hclwrite.Body.AppendBlock takes the same *hclwrite.Block value into a new body,
+	// and writeDataset's src argument (the generated dataset's own body) had its stage blocks moved
+	// into out the first time through — a second call would find them already gone. Extraction
+	// happens after res.HCL is captured, so it cannot affect those bytes.
+	for _, block := range out.Body().Blocks() {
+		labels := block.Labels()
+		if block.Type() != "resource" || len(labels) != 2 {
+			continue
+		}
+		switch labels[0] {
+		case "observe_dataset":
+			f := hclwrite.NewEmptyFile()
+			f.Body().AppendBlock(block)
+			res.DatasetHCL = hclwrite.Format(f.Bytes())
+		case "observe_resource_grants":
+			f := hclwrite.NewEmptyFile()
+			f.Body().AppendBlock(block)
+			res.GrantsHCL = hclwrite.Format(f.Bytes())
+		}
+	}
+
 	return res, nil
 }
 

@@ -73,6 +73,31 @@ jobs:
         with:
           fetch-depth: 0
 
+      # peter-evans/create-pull-request always computes ONE commit representing everything
+      # currently different from base and resets `branch` to match it -- there's no "just append"
+      # mode. So it's only used below for the first run that opens the PR. Once a PR is open, a
+      # plain `git commit` + `git push` onto its branch already updates it (that's just how GitHub
+      # PRs work), and preserves that commit as a real, separate entry in the branch's history
+      # instead of getting squashed into one ever-growing commit on every run.
+      #
+      # Deliberately keyed on the PR being OPEN, not just the branch existing: a closed-without-
+      # merge PR's branch should NOT be built on top of -- see the earlier discussion on this --
+      # only an open one represents work still in flight that a new run should add to.
+      - name: Check for an existing open dataset-import PR
+        id: existing-pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          number="$(gh pr view dataset-import --repo "${{ github.repository }}" --json number,state --jq 'select(.state == "OPEN") | .number' 2>/dev/null || true)"
+          echo "number=$number" >> "$GITHUB_OUTPUT"
+          if [ -n "$number" ]; then
+            echo "Open PR #$number found on dataset-import -- will commit directly onto its branch."
+            git fetch origin dataset-import
+            git checkout dataset-import
+          else
+            echo "No open PR on dataset-import -- will open a fresh one from main."
+          fi
+
       - name: Checkout terraform-account-workflows (for tf-dataset-import source)
         uses: actions/checkout@v4
         with:
@@ -208,16 +233,56 @@ jobs:
         # failure: report.json's `needs_attention` field tells you why, and a human reviewing the
         # PR is how those get resolved.
 
+      # Existing-PR path: a plain commit directly onto dataset-import's current tip, scoped to just
+      # the paths tf-dataset-import touches (mirrors create-pull-request's own add-paths below, so
+      # an unrelated dirty file can't sneak in). Committer identity matches create-pull-request's
+      # own default bot identity, so commits from either path look consistent in the branch's log.
+      - name: Commit and push onto the existing open PR
+        if: steps.existing-pr.outputs.number
+        env:
+          DATASET_IDS: ${{ inputs.dataset-ids }}
+          MODULE_DIR: ${{ inputs.module-dir }}
+        run: |
+          for f in "$MODULE_DIR"/*.tf main.tf imports.tf; do
+            [ -e "$f" ] && git add -- "$f"
+          done
+          if git diff --cached --quiet; then
+            echo "Nothing to commit."
+          else
+            git -c user.name="github-actions[bot]" \
+                -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+                commit -m "Import/update datasets $DATASET_IDS"
+            git push origin dataset-import
+          fi
+
+      # create-pull-request handles labels/draft itself in the fresh-PR path below; this replicates
+      # the same exit-3 signal for the existing-PR path, since that path never calls it.
+      - name: Update labels/draft state on the existing PR
+        if: steps.existing-pr.outputs.number
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ steps.existing-pr.outputs.number }}
+        run: |
+          if [ "${{ steps.run.outputs.exit_code }}" = "3" ]; then
+            gh pr edit "$PR_NUMBER" --repo "${{ github.repository }}" --add-label needs-attention
+            gh pr ready "$PR_NUMBER" --repo "${{ github.repository }}" --undo || true
+          else
+            gh pr ready "$PR_NUMBER" --repo "${{ github.repository }}" || true
+          fi
+
       # The PR body itself stays static -- peter-evans/create-pull-request overwrites the whole
       # body on every run, so anything run-specific put there would only ever show the latest run
       # and silently drop every earlier one. Each run's report goes in its own PR comment instead
       # (below), the same pattern tf-account.yaml already uses for terraform plan output.
-      - name: Create or update pull request
+      #
+      # Fresh-PR path only: skipped entirely when an open PR already exists (see above). This is
+      # the one caller of create-pull-request now, so its own commit-vs-base computation only ever
+      # runs against a genuinely fresh branch with nothing to squash.
+      - name: Create a new pull request
+        if: ${{ !steps.existing-pr.outputs.number }}
         id: pr
         uses: peter-evans/create-pull-request@v6
         with:
-          # A single persistent branch, reused across runs regardless of which ids they process --
-          # so a run always adds onto whatever's already open rather than opening a parallel PR.
           branch: dataset-import
           delete-branch: true
           commit-message: "Import/update datasets ${{ inputs.dataset-ids }}"
@@ -237,11 +302,12 @@ jobs:
             imports.tf
 
       - name: Comment this run's report on the PR
-        if: steps.pr.outputs.pull-request-number
+        if: steps.existing-pr.outputs.number || steps.pr.outputs.pull-request-number
         uses: actions/github-script@v7
         env:
           DATASET_IDS: ${{ inputs.dataset-ids }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          PR_NUMBER: ${{ steps.existing-pr.outputs.number || steps.pr.outputs.pull-request-number }}
         with:
           script: |
             const fs = require('fs')
@@ -254,6 +320,6 @@ jobs:
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              issue_number: ${{ steps.pr.outputs.pull-request-number }},
+              issue_number: Number(process.env.PR_NUMBER),
               body,
             })

@@ -2,9 +2,11 @@
 // config-driven import blocks that bring it into an account repo's state.
 //
 // A dataset id already under this repo's management is not skipped — it is treated as an update:
-// its file is regenerated from the dataset's current live definition and its freshness_overrides
-// entry is kept in sync, so re-running for the same id is how a dataset that changed in Observe stays
-// in sync in Terraform, and re-running with nothing changed is a genuine no-op.
+// its resource block is regenerated from the dataset's current live definition and spliced back into
+// whatever file already declares it (never rewritten to a new file named after the resource), and
+// its freshness_overrides entry is kept in sync, so re-running for the same id is how a dataset that
+// changed in Observe stays in sync in Terraform, and re-running with nothing changed is a genuine
+// no-op.
 //
 // The tool never talks to a terraform backend. It reads the Observe API and local files, and writes
 // .tf files plus the import blocks; performing the import (`terraform apply`) is a deliberate,
@@ -108,7 +110,7 @@ func run(ctx context.Context, cfg *Config) (bool, error) {
 
 	// A destination that exists but does not merely declare the dataset (and, for an update, its
 	// grants companion) being written would be overwritten, so the run stops before writing anything.
-	clobbers, err := destinationConflicts(cfg, repo, names)
+	clobbers, err := destinationConflicts(cfg, repo, names, alreadyManaged)
 	if err != nil {
 		return false, err
 	}
@@ -149,6 +151,15 @@ func run(ctx context.Context, cfg *Config) (bool, error) {
 		report.TargetStateConflicts = conflicts
 	}
 
+	// Resolved once, up front: an already-managed dataset's placement is the file (and byte range)
+	// it is already declared in, never the <name>.tf convention, so both the manifest/report (which
+	// need to say where a file lives) and writeAll (which needs to actually write there) have to
+	// agree on the same answer.
+	plans, err := planResults(repo, results)
+	if err != nil {
+		return false, err
+	}
+
 	manifest := &output.Manifest{
 		CustomerID:    cfg.CustomerID,
 		Domain:        cfg.Domain,
@@ -157,9 +168,8 @@ func run(ctx context.Context, cfg *Config) (bool, error) {
 		TFWorkspace:   cfg.TFWorkspace,
 	}
 	for _, res := range results {
-		file := filepath.Join(cfg.ModuleDir, res.ResourceName+".tf")
 		address := fmt.Sprintf("%s.observe_dataset.%s", cfg.ModuleAddress(), res.ResourceName)
-		entry := output.NewEntry(res, file, address)
+		entry := output.NewEntry(res, plans[res.DatasetID].RelFile, address)
 		entry.HasGrants = len(grants[res.DatasetID]) > 0
 		_, entry.AlreadyManaged = alreadyManaged[res.DatasetID]
 		entry.GrantsAlreadyManaged = grantsAlreadyManaged(repo, index, res.ResourceName)
@@ -171,7 +181,7 @@ func run(ctx context.Context, cfg *Config) (bool, error) {
 	report.EmittedCorrelationTags = cfg.EmitCorrelationTags
 
 	if cfg.DryRun {
-		fmt.Printf("\ndry run: would write %d files under %s\n", len(results), cfg.ModuleDir)
+		fmt.Printf("\ndry run: would write %d files under %s\n", len(touchedFiles(plans)), cfg.ModuleDir)
 		if n := output.PendingImportCount(manifest); n > 0 {
 			fmt.Printf("dry run: would write %d import blocks to %s\n", n, filepath.Join(cfg.Repo, output.ImportBlocksFile))
 		}
@@ -179,7 +189,7 @@ func run(ctx context.Context, cfg *Config) (bool, error) {
 		return report.NeedsAttention(), nil
 	}
 
-	if err := writeAll(cfg, repo, results, manifest, freshnessBytes, freshnessChanged); err != nil {
+	if err := writeAll(cfg, repo, results, plans, manifest, freshnessBytes, freshnessChanged); err != nil {
 		return false, err
 	}
 	if err := report.WriteJSON(filepath.Join(cfg.OutDir, "report.json")); err != nil {
@@ -362,12 +372,21 @@ func rewriteAll(cfg *Config, defs map[string]*observe.TerraformDefinition, names
 // replace one wholesale. An update target — a file that already declares exactly this dataset — is
 // not a conflict; that is the whole point of an update.
 //
+// An already-managed dataset id is skipped here entirely, not merely permitted: it is placed by
+// planResult into the exact byte range its existing resource already occupies (see
+// tf.Repo.ExistingDatasets), never by writing a whole file at the <name>.tf convention, so the risk
+// this check exists for — silently overwriting a file's unrelated content — cannot arise for it
+// regardless of what else that file declares.
+//
 // The repo root's `imports.tf` is a destination too, and it sits among the repo's hand-maintained
 // root files, so it gets the same treatment: refuse to append into something that is not
 // recognisably our own import blocks.
-func destinationConflicts(cfg *Config, repo *tf.Repo, names map[string]string) ([]string, error) {
+func destinationConflicts(cfg *Config, repo *tf.Repo, names map[string]string, alreadyManaged map[string]string) ([]string, error) {
 	resourceNames := make([]string, 0, len(names))
-	for _, name := range names {
+	for id, name := range names {
+		if _, managed := alreadyManaged[id]; managed {
+			continue
+		}
 		resourceNames = append(resourceNames, name)
 	}
 	sort.Strings(resourceNames)
@@ -406,16 +425,14 @@ func destinationConflicts(cfg *Config, repo *tf.Repo, names map[string]string) (
 	return conflicts, nil
 }
 
-// writeAll writes the .tf files, the (already-computed) freshness_overrides update, runs terraform
-// fmt, and emits the manifest, import blocks, and rollback script.
-func writeAll(cfg *Config, repo *tf.Repo, results []*rewrite.Result, manifest *output.Manifest, freshnessBytes []byte, freshnessChanged []string) error {
-	var written []string
-	for _, res := range results {
-		path := filepath.Join(repo.ModulePath(), res.ResourceName+".tf")
-		if err := os.WriteFile(path, res.HCL, 0o644); err != nil {
-			return err
-		}
-		written = append(written, path)
+// writeAll writes the .tf files (per each result's already-resolved placement — a whole new file
+// for a first-time adoption, or in-place splices for an already-managed dataset and/or its grants),
+// the (already-computed) freshness_overrides update, runs terraform fmt, and emits the manifest,
+// import blocks, and rollback script.
+func writeAll(cfg *Config, repo *tf.Repo, results []*rewrite.Result, plans map[string]resultPlacement, manifest *output.Manifest, freshnessBytes []byte, freshnessChanged []string) error {
+	written, err := writeResourceFiles(results, plans)
+	if err != nil {
+		return err
 	}
 	fmt.Printf("wrote     %d files to %s\n", len(written), cfg.ModuleDir)
 

@@ -380,10 +380,10 @@ locals { x = 1 }`, false},
 	}
 }
 
-// TestGrantsDeclaredSurvivesTheNameCollapse covers why grants existence can't be read off Existing
-// directly: a dataset and its grants companion share the exact same name, and scanExistingResources
-// keeps only the first block it sees per name (by design, for the file-collision check). GrantsDeclared
-// is populated from every observe_resource_grants block seen, independent of that collapsing.
+// TestGrantsDeclaredSurvivesTheNameCollapse covers why grants existence can't be read off found
+// directly: a dataset and its grants companion share the exact same name, and found keeps only the
+// first block it sees per name (by design, for the file-collision check). The datasets and grants
+// maps are populated from every block of their respective type seen, independent of that collapsing.
 func TestGrantsDeclaredSurvivesTheNameCollapse(t *testing.T) {
 	dir := t.TempDir()
 	src := `resource "observe_dataset" "round_trip" {
@@ -398,18 +398,117 @@ resource "observe_resource_grants" "round_trip" {
 	if err := os.WriteFile(filepath.Join(dir, "round_trip.tf"), []byte(src), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	found, grantsDeclared, err := scanExistingResources(dir)
+	found, datasets, grants, err := scanExistingResources(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The dataset block, seen first, is what Existing keeps for this name.
+	// The dataset block, seen first, is what found keeps for this name.
 	if e := found["round_trip"]; e.Type != "observe_dataset" {
-		t.Errorf("want Existing to keep the dataset block, got type %q", e.Type)
+		t.Errorf("want found to keep the dataset block, got type %q", e.Type)
 	}
-	if !grantsDeclared["round_trip"] {
-		t.Error("want GrantsDeclared to record the grants block despite the name collision")
+	if e, ok := datasets["round_trip"]; !ok || e.Type != "observe_dataset" {
+		t.Errorf("want datasets to hold the dataset block regardless of scan order, got %+v, ok=%t", e, ok)
 	}
-	if grantsDeclared["nothing_declares_this"] {
+	if e, ok := grants["round_trip"]; !ok || e.Type != "observe_resource_grants" {
+		t.Errorf("want grants to record the grants block despite the name collision, got %+v, ok=%t", e, ok)
+	}
+	if _, ok := grants["nothing_declares_this"]; ok {
 		t.Error("an absent name must not read as declared")
+	}
+}
+
+// TestDatasetsAndGrantsAreIndependentOfScanOrder is the scenario TestGrantsDeclaredSurvivesTheName-
+// Collapse's own doc comment warns about but does not exercise: the grants block declared *before*
+// the dataset it belongs to, in a separate file that sorts earlier. Before datasets/grants existed,
+// this would have made found — and anything built from it, like the managed-dataset index — resolve
+// "round_trip" to the grants resource instead of the dataset, silently losing track of where the
+// dataset itself lives.
+func TestDatasetsAndGrantsAreIndependentOfScanOrder(t *testing.T) {
+	dir := t.TempDir()
+	// "aaa_grants.tf" sorts before "zzz_dataset.tf", so the grants block is scanned first.
+	grantsSrc := `resource "observe_resource_grants" "round_trip" {
+  oid = observe_dataset.round_trip.oid
+}
+`
+	datasetSrc := `resource "observe_dataset" "round_trip" {
+  name   = "x"
+  inputs = { "a" = "o:::dataset:1" }
+  stage { pipeline = "filter true" }
+}
+`
+	if err := os.WriteFile(filepath.Join(dir, "aaa_grants.tf"), []byte(grantsSrc), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "zzz_dataset.tf"), []byte(datasetSrc), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, datasets, grants, err := scanExistingResources(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ds, ok := datasets["round_trip"]
+	if !ok {
+		t.Fatal("want the dataset resource found despite the grants block being scanned first")
+	}
+	if !strings.HasSuffix(ds.File, "zzz_dataset.tf") {
+		t.Errorf("dataset File = %q, want zzz_dataset.tf", ds.File)
+	}
+	g, ok := grants["round_trip"]
+	if !ok {
+		t.Fatal("want the grants resource found")
+	}
+	if !strings.HasSuffix(g.File, "aaa_grants.tf") {
+		t.Errorf("grants File = %q, want aaa_grants.tf", g.File)
+	}
+}
+
+// TestExistingResourceRangeCoversExactlyItsOwnBlock covers the byte range an update relies on to
+// splice a resource's fresh content into an existing file without disturbing its neighbors: it must
+// start at the resource's own `resource` keyword and end at its own closing brace, not spill into
+// whatever comes before or after it in the file.
+func TestExistingResourceRangeCoversExactlyItsOwnBlock(t *testing.T) {
+	dir := t.TempDir()
+	src := `resource "observe_dataset" "before" {
+  name   = "before"
+  inputs = { "a" = "o:::dataset:1" }
+  stage { pipeline = "filter true" }
+}
+
+resource "observe_dataset" "target" {
+  name   = "target"
+  inputs = { "a" = "o:::dataset:2" }
+  stage { pipeline = "filter true" }
+}
+
+resource "observe_dataset" "after" {
+  name   = "after"
+  inputs = { "a" = "o:::dataset:3" }
+  stage { pipeline = "filter true" }
+}
+`
+	path := filepath.Join(dir, "multi.tf")
+	if err := os.WriteFile(path, []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, datasets, _, err := scanExistingResources(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	target, ok := datasets["target"]
+	if !ok {
+		t.Fatal("want the target dataset found")
+	}
+
+	got := src[target.Range.Start.Byte:target.Range.End.Byte]
+	if !strings.HasPrefix(got, `resource "observe_dataset" "target"`) {
+		t.Errorf("range does not start at target's own resource block:\n%s", got)
+	}
+	if strings.Contains(got, `"before"`) || strings.Contains(got, `"after"`) {
+		t.Errorf("range spills into a neighboring block:\n%s", got)
+	}
+	if !strings.HasSuffix(strings.TrimRight(got, "\n"), "}") {
+		t.Errorf("range does not end at target's own closing brace:\n%s", got)
 	}
 }

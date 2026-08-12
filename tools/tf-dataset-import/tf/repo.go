@@ -28,9 +28,19 @@ type Repo struct {
 	// Existing holds every resource and data source already declared in the module, keyed by
 	// lowercased terraform name so collisions can be detected case-insensitively.
 	Existing map[string]ExistingResource
+	// ExistingDatasets holds only `observe_dataset` resources, keyed the same way as Existing. Use
+	// this, not Existing, to find where a dataset resource itself is declared: Existing keeps only
+	// the first block seen per name, and a dataset's grants companion shares its exact name, so
+	// Existing[key] can resolve to the grants block instead when one precedes the other in scan
+	// order. See scanExistingResources for the full reasoning.
+	ExistingDatasets map[string]ExistingResource
+	// ExistingGrants holds only `observe_resource_grants` resources, keyed the same way. An update
+	// consults this to decide whether a dataset's grants block already exists (and where, to replace
+	// it in place) or needs inserting fresh.
+	ExistingGrants map[string]ExistingResource
 	// GrantsDeclared records, by lowercased resource name, whether an observe_resource_grants block
-	// with that name is already declared in the module. See scanExistingResources for why this can't
-	// be read off Existing directly.
+	// with that name is already declared in the module. Derived from ExistingGrants; kept as its own
+	// bool map because most callers only need the yes/no answer.
 	GrantsDeclared map[string]bool
 	// ModuleSources maps every module label called from the root config to its source directory, so a
 	// variable bound to another module's outputs can be followed to that module's own declarations.
@@ -140,12 +150,17 @@ func LoadRepo(root, moduleDir string) (*Repo, error) {
 	r.HasFreshnessOverrides = hasOverrides
 	r.ModuleSources = sources
 
-	existing, grantsDeclared, err := scanExistingResources(filepath.Join(root, moduleDir))
+	existing, datasets, grants, err := scanExistingResources(filepath.Join(root, moduleDir))
 	if err != nil {
 		return nil, err
 	}
 	r.Existing = existing
-	r.GrantsDeclared = grantsDeclared
+	r.ExistingDatasets = datasets
+	r.ExistingGrants = grants
+	r.GrantsDeclared = make(map[string]bool, len(grants))
+	for key := range grants {
+		r.GrantsDeclared[key] = true
+	}
 	r.indexManagedDatasets()
 
 	return r, nil
@@ -161,9 +176,10 @@ func (r *Repo) indexManagedDatasets() {
 	if !known {
 		return
 	}
-	for _, e := range r.Existing {
-		// A data source of the same type declares no dataset, so only managed resources count.
-		if !e.IsResource || e.Type != "observe_dataset" || e.DatasetName == "" {
+	for _, e := range r.ExistingDatasets {
+		// ExistingDatasets already guarantees a managed observe_dataset resource; only a computed
+		// name (declaredDatasetName returning "") is left to skip here.
+		if e.DatasetName == "" {
 			continue
 		}
 		full := e.DatasetName

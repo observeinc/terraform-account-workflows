@@ -28,6 +28,10 @@ type ExistingResource struct {
 	// the module's `format(var.name_format, "…")` call. Empty for anything else, or when the name is
 	// not a plain literal.
 	DatasetName string
+	// Range spans the whole block — from its `resource`/`data` keyword through its closing brace —
+	// as byte offsets into File's contents. This is what lets an update replace just this resource's
+	// own bytes in place (see tf.Splice) without disturbing anything else declared in the same file.
+	Range hcl.Range
 }
 
 // scanExistingResources collects every resource and data source declared in the module directory,
@@ -37,28 +41,36 @@ type ExistingResource struct {
 // distinct addresses, but a case-only difference between a generated and an existing name is a
 // mistake, not a plan.
 //
-// The second return value records, by lowercased name, whether an `observe_resource_grants` block
-// with that name exists anywhere in the module. It can't be folded into the main map: a dataset and
-// its grants companion share the exact same name, and the main map keeps only the first block seen
-// per name (by design — that is what makes it answer "is this filename taken" correctly). Grants
-// existence has to survive that collapsing to answer a different question: whether a dataset update
-// needs a new import for its grants specifically, independent of whether the dataset itself does.
-func scanExistingResources(moduleDir string) (map[string]ExistingResource, map[string]bool, error) {
+// Three maps come back, all keyed by the same lowercased name but answering different questions:
+//
+//   - found holds the first resource or data source block seen per name, of any type. This is what
+//     answers "is this name taken at all" — the collision check does not care which of a dataset and
+//     its grants companion happens to win, only that the name exists.
+//   - datasets holds only `observe_dataset` resource blocks (never a data source, never grants).
+//     A dataset and its grants companion share the exact same name, so this cannot be read off found
+//     directly: whichever of the two is scanned first would otherwise win that slot, and code that
+//     specifically needs the dataset's own file and byte range — to update it in place rather than
+//     overwrite a whole file — would sometimes get the wrong resource's location.
+//   - grants holds only `observe_resource_grants` resource blocks, for the same reason in reverse:
+//     locating a dataset's grants companion (to replace it in place, or learn there isn't one yet)
+//     needs its own file and range regardless of which of the two found happened to keep.
+func scanExistingResources(moduleDir string) (found, datasets, grants map[string]ExistingResource, err error) {
 	files, err := terraformFiles(moduleDir)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
-	found := map[string]ExistingResource{}
-	grantsDeclared := map[string]bool{}
+	found = map[string]ExistingResource{}
+	datasets = map[string]ExistingResource{}
+	grants = map[string]ExistingResource{}
 	for _, file := range files {
 		src, err := os.ReadFile(file)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		f, diags := hclsyntax.ParseConfig(src, file, hcl.InitialPos)
 		if diags.HasErrors() {
-			return nil, nil, fmt.Errorf("parse %s: %s", file, diags.Error())
+			return nil, nil, nil, fmt.Errorf("parse %s: %s", file, diags.Error())
 		}
 		body, ok := f.Body.(*hclsyntax.Body)
 		if !ok {
@@ -71,13 +83,7 @@ func scanExistingResources(moduleDir string) (map[string]ExistingResource, map[s
 			if len(block.Labels) != 2 {
 				continue
 			}
-			if block.Type == "resource" && block.Labels[0] == "observe_resource_grants" {
-				grantsDeclared[strings.ToLower(block.Labels[1])] = true
-			}
 			key := strings.ToLower(block.Labels[1])
-			if _, exists := found[key]; exists {
-				continue
-			}
 			address := block.Labels[0] + "." + block.Labels[1]
 			if block.Type == "data" {
 				address = "data." + address
@@ -87,14 +93,25 @@ func scanExistingResources(moduleDir string) (map[string]ExistingResource, map[s
 				File:       file,
 				Type:       block.Labels[0],
 				IsResource: block.Type == "resource",
+				Range:      block.Range(),
 			}
 			if entry.IsResource && block.Labels[0] == "observe_dataset" {
 				entry.DatasetName = declaredDatasetName(block)
+				if _, exists := datasets[key]; !exists {
+					datasets[key] = entry
+				}
 			}
-			found[key] = entry
+			if entry.IsResource && block.Labels[0] == "observe_resource_grants" {
+				if _, exists := grants[key]; !exists {
+					grants[key] = entry
+				}
+			}
+			if _, exists := found[key]; !exists {
+				found[key] = entry
+			}
 		}
 	}
-	return found, grantsDeclared, nil
+	return found, datasets, grants, nil
 }
 
 // declaredDatasetName reads the Observe dataset name out of a committed resource block, unwrapping the
