@@ -28,6 +28,14 @@ on:
         required: false
         type: string
         default: '1.5.4'
+      name-overrides-file:
+        description: >-
+          Optional repo-relative path to a JSON file mapping dataset id (string) to Terraform
+          resource name, e.g. modules/capone/name-overrides.json. Use to resolve resource name
+          collisions when the auto-generated name is already taken by an existing resource.
+        required: false
+        type: string
+        default: ''
       twingate-enabled:
         description: 'Connect to Twingate before talking to AWS/Observe -- needed for any tenant with IP-restricted API access'
         required: false
@@ -182,6 +190,7 @@ jobs:
           DATASET_IDS: ${{ inputs.dataset-ids }}
           MODULE_DIR: ${{ inputs.module-dir }}
           IMPORT_GATE: ${{ inputs.import-gate }}
+          NAME_OVERRIDES_FILE: ${{ inputs.name-overrides-file }}
           CUSTOMER_ID: ${{ steps.observe-creds.outputs.customer-id }}
           OBSERVE_DOMAIN_VALUE: ${{ steps.observe-creds.outputs.domain }}
         run: |
@@ -196,6 +205,7 @@ jobs:
             -out "$RUNNER_TEMP/tf-dataset-import-out"
           )
           [ -n "$IMPORT_GATE" ] && args+=(-import-gate "$IMPORT_GATE")
+          [ -n "$NAME_OVERRIDES_FILE" ] && args+=(-name-overrides "$NAME_OVERRIDES_FILE")
           # Captured to a file (in addition to the normal step log) so a hard failure -- which
           # means report.json was never written -- still has something concrete to show in the
           # job summary, instead of a bare "no report.json" that sends you digging through raw
