@@ -1,0 +1,6 @@
+{
+  "dataSource": "",
+  "resource": "\nresource \"observe_dataset\" \"existing_peer\" {\n    freshness = \"5m0s\"\n    inputs    = {\n        \"applogs\" = \"o:::dataset:99000101\"\n    }\n    name      = \"Fake/Existing Peer Clone\"\n    workspace = \"o:::workspace:99000001\"\n\n    stage {\n        pipeline = <<-EOT\n            filter true\n        EOT\n    }\n}\n",
+  "importId": "99010003",
+  "importName": "existing_peer"
+}

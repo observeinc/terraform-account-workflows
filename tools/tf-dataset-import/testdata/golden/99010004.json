@@ -1,0 +1,6 @@
+{
+  "dataSource": "\ndata \"observe_dataset\" \"github_events\" {\n    workspace = \"o:::workspace:99000009\"\n    name      = \"Fake/GitHub Events\"\n}",
+  "resource": "\n\nresource \"observe_dataset\" \"github_events\" {\n    acceleration_disabled = false\n    description           = \"Fake GitHub Events\"\n    entity_tags           = {}\n    icon_url              = \"brick-wall\"\n    inputs                = {\n        \"observation\" = \"o:::dataset:99007951\"\n    }\n    name                  = \"Fake/GitHub Events\"\n    object_tags           = {}\n    workspace             = \"o:::workspace:99000009\"\n\n    stage {\n        output_stage = false\n        pipeline     = <<-EOT\n            filter OBSERVATION_KIND = \"http\"\n            filter (string(EXTRA.path) = \"/example\")\n            pick_col \n              BUNDLE_TIMESTAMP,\n              FIELDS\n        EOT\n    }\n}\n\n",
+  "importId": "99010004",
+  "importName": "github_events"
+}

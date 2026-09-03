@@ -1,0 +1,219 @@
+{
+  "version": 4,
+  "terraform_version": "1.5.4",
+  "serial": 1,
+  "lineage": "fake",
+  "resources": [
+    {
+      "mode": "data",
+      "type": "observe_workspace",
+      "name": "default",
+      "provider": "provider[\"registry.terraform.io/observeinc/observe\"]",
+      "instances": [
+        {
+          "attributes": {
+            "id": "99000001",
+            "name": "Default",
+            "oid": "o:::workspace:99000001"
+          }
+        }
+      ]
+    },
+    {
+      "mode": "data",
+      "type": "observe_datastream",
+      "name": "applogs",
+      "provider": "provider[\"registry.terraform.io/observeinc/observe\"]",
+      "instances": [
+        {
+          "attributes": {
+            "id": "99000100",
+            "name": "AppLogs",
+            "oid": "o:::datastream:99000100",
+            "dataset": "o:::dataset:99000101"
+          }
+        }
+      ]
+    },
+    {
+      "mode": "data",
+      "type": "observe_datastream",
+      "name": "networklogs",
+      "provider": "provider[\"registry.terraform.io/observeinc/observe\"]",
+      "instances": [
+        {
+          "attributes": {
+            "id": "99000200",
+            "name": "NetworkLogs",
+            "oid": "o:::datastream:99000200",
+            "dataset": "o:::dataset:99000201"
+          }
+        }
+      ]
+    },
+    {
+      "mode": "data",
+      "type": "observe_dataset",
+      "name": "usage_raw_usage_events",
+      "provider": "provider[\"registry.terraform.io/observeinc/observe\"]",
+      "instances": [
+        {
+          "attributes": {
+            "id": "99000300",
+            "name": "usage/Raw Usage Events",
+            "oid": "o:::dataset:99000300/2025-01-01T00:00:00Z"
+          }
+        }
+      ]
+    },
+    {
+      "module": "module.example",
+      "mode": "managed",
+      "type": "observe_correlation_tag",
+      "name": "peer_ip_address",
+      "provider": "provider[\"terraform.observeinc.com/observeinc/observe\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "column": "ip_address",
+            "name": "ip.address",
+            "id": "99000900",
+            "dataset": "o:::dataset:99001000/2025-06-01T00:00:00Z"
+          }
+        }
+      ]
+    },
+    {
+      "module": "module.example",
+      "mode": "managed",
+      "type": "observe_reference_table",
+      "name": "peer_lookup",
+      "provider": "provider[\"terraform.observeinc.com/observeinc/observe\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "name": "Peer Lookup",
+            "id": "99000901",
+            "oid": "o:::referencetable:99001400",
+            "dataset": "o:::dataset:99001500/2025-06-01T00:00:00Z"
+          }
+        }
+      ]
+    },
+    {
+      "module": "module.example",
+      "mode": "managed",
+      "type": "observe_dataset",
+      "name": "existing_peer",
+      "provider": "provider[\"registry.terraform.io/observeinc/observe\"]",
+      "instances": [
+        {
+          "attributes": {
+            "id": "99001000",
+            "name": "Fake/Existing Peer",
+            "oid": "o:::dataset:99001000/2025-06-01T00:00:00Z",
+            "freshness": "1h0m0s",
+            "inputs": {
+              "applogs": "o:::dataset:99000101"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "module": "module.example",
+      "mode": "managed",
+      "type": "observe_dataset",
+      "name": "downstream_of_peer",
+      "provider": "provider[\"registry.terraform.io/observeinc/observe\"]",
+      "instances": [
+        {
+          "attributes": {
+            "id": "99001500",
+            "name": "Fake/Downstream Of Peer",
+            "oid": "o:::dataset:99001500/2025-06-01T00:00:00Z",
+            "freshness": "5m0s",
+            "inputs": {
+              "one": "o:::dataset:99010001/2025-06-01T00:00:00Z"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "module": "module.example",
+      "mode": "managed",
+      "type": "observe_dataset",
+      "name": "downstream_two_hops",
+      "provider": "provider[\"registry.terraform.io/observeinc/observe\"]",
+      "instances": [
+        {
+          "attributes": {
+            "id": "99001600",
+            "name": "Fake/Downstream Two Hops",
+            "oid": "o:::dataset:99001600/2025-06-01T00:00:00Z",
+            "inputs": {
+              "prev": "o:::dataset:99001500/2025-06-01T00:00:00Z"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "module": "module.example",
+      "mode": "data",
+      "type": "observe_dataset",
+      "name": "dashboard_fake__dataset_only_via_data_source",
+      "provider": "provider[\"registry.terraform.io/observeinc/observe\"]",
+      "instances": [
+        {
+          "attributes": {
+            "id": "99002000",
+            "name": "Fake/Only Via Data Source",
+            "oid": "o:::dataset:99002000/2025-06-01T00:00:00Z"
+          }
+        }
+      ]
+    },
+    {
+      "module": "module.example",
+      "mode": "data",
+      "type": "observe_oid",
+      "name": "storage_integration_fake",
+      "provider": "provider[\"registry.terraform.io/observeinc/observe\"]",
+      "instances": [
+        {
+          "attributes": {
+            "oid": "o:::storageintegration:99003000"
+          }
+        }
+      ]
+    },
+    {
+      "module": "",
+      "mode": "managed",
+      "type": "observe_rbac_group",
+      "name": "rbac_group",
+      "instances": [
+        {
+          "index_key": "TEST-VIEWER",
+          "attributes": {
+            "id": "5001",
+            "name": "TEST-VIEWER",
+            "oid": "o:::rbacgroup:5001"
+          }
+        },
+        {
+          "index_key": "TEST-WRITER",
+          "attributes": {
+            "id": "5002",
+            "name": "TEST-WRITER",
+            "oid": "o:::rbacgroup:5002"
+          }
+        }
+      ]
+    }
+  ]
+}
